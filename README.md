@@ -9,7 +9,7 @@ To get the app running:
   - battle data includes a CSV with ip spend data and file containing copy of general battle data posted on Discord with every data set.
   - There is an example in folder "battle_xxx".
   - it is recommended to use names such as "battle_???" since these are included in .gitingore
-- Open the source file "plots_via_RStudio.R" in RStudio.
+- Open the source file "plots_via_rstudio.R" in RStudio.
 - Set the control variables as follows:
   - directory - path to the directory with batttle data.
   - filenames - vector with names of files with battle data (you will probably only have one, "ip_spend_battle_xxx.csv".

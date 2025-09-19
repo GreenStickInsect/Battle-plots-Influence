@@ -17,7 +17,7 @@ source("plotting_functions.R")
 ### Manually changed variables ###
 
 # Change as needed - this is a directory in which data files are and where plots will be generated
-directory = "./battle_125"
+directory = "./battle_xxx"
 
 # File with data
 filenames = c("ip_spend_battle_125.csv")
