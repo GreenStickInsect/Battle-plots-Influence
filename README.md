@@ -8,6 +8,7 @@ To get the app running:
 - Create a folder with battle data somewhere on your machine.
   - battle data includes a CSV with ip spend data and file containing copy of general battle data posted on Discord with every data set.
   - There is an example in folder "battle_125".
+  - it is recommended to use names such as "battle_???" since these are included in .gitingore
 - Open the source file "plots_via_RStudio.R" in RStudio.
 - Set the control variables as follows:
   - directory - path to the directory with batttle data.
