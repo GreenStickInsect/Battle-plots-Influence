@@ -19,5 +19,7 @@ To get the app running:
 - Run all the code (shortcut in RStudio - ctrl + a (select all), ctrl + enter (run selected))
 
 
-If you need help, best contact @Ogrodnik10 on [Influence Discord server](<https://canary.discord.com/channels/562910943848169472/1418601973543862303>).
+If you need help, best contact @Ogrodnik10 on [Influence Discord server](<https://discord.gg/6yEf3cBq98>).
+There is even a dedicated post for this [here](<https://canary.discord.com/channels/562910943848169472/1418601973543862303>) (make sure you join the server before following this link, else it won't work).
+
 Alternatively, you can also send an email to gstickinsect@gmail.com
