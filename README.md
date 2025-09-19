@@ -12,7 +12,7 @@ To get the app running:
 - Open the source file "plots_via_rstudio.R" in RStudio.
 - Set the control variables as follows:
   - directory - path to the directory with batttle data.
-  - filenames - vector with names of files with battle data (you will probably only have one, "ip_spend_battle_xxx.csv".
+  - filenames - vector with names of files with battle data (you will probably only have one, "ip_spend_battle_???.csv".
   - battleinfofile - name of the file containing general battle data.
   - export - (TRUE or FALSE) whether plots should be exported as files (these appear in your data folder)
 
