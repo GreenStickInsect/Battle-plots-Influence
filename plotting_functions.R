@@ -431,6 +431,13 @@ bonusplot = function(allset, lim=NULL, horiz=FALSE, text.cex=1, tofile=FALSE, ..
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to barplot()
 #
+#   returns: a list with some of parameters used to draw the plot:
+#     matr - matrix of data used by 'height' argument of barplot().
+#     labels - list of labels with player names, which are drawn on each team's bar.
+#     labelpos - an analogous list of y positions of the above labels.
+#     labelcol - an analogous list of colors for these labels. This is a processed form of argument 'textcols', if provided.
+#     ylim - a numerical vector of y axis limits, ordered as (min, max).
+#
 # Examples: (these are using datasets as prepared in plots_via_rstudio.R .)
 # 1 - Generate a within-R bar plot comparing teams MT and DC:
 #    vsplot(teams = list(sets$MT$per_player, sets$DC$per_player), teamnames = c("MindTech Institute", "Delta Collective"),
@@ -515,7 +522,7 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
   sizes = vapply(teams, nrow, c(0))
   for (i in seq(length(teams)))
   {
-    vals = c(vals, rep(NA, sum(sizes[0:(i-1)])), teams[[i]]$sumUsed, rep(NA, sum(sizes[-(0:i)])))
+    vals = c(vals, rep(0, sum(sizes[0:(i-1)])), teams[[i]]$sumUsed, rep(0, sum(sizes[-(0:i)])))
   }
   stacked = matrix(vals, ncol=length(teams), byrow=FALSE)
   
@@ -538,7 +545,7 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
   
   # Plot title
   ttl = teamnames[[1]]
-  for (name in teamnames[[-1]]) { ttl = paste(ttl, "vs", name) }
+  for (name in teamnames[-1]) { ttl = paste(ttl, "vs", name) }
   
   # Auto writing to file utility
   if (tofile != FALSE) png(tofile, 1280, 720)
@@ -565,7 +572,7 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
     print(positions)
     dev.off()
   }
-  return(invisible(list(matr=stacked, labels=pnamelabs, labelpos=labposlst, labelcol=textcols)))
+  return(invisible(list(matr=stacked, labels=pnamelabs, labelpos=labposlst, labelcol=textcols, ylim=ylim)))
 }
 
 # A variant of vsplot which compares player Nex to all other players.
