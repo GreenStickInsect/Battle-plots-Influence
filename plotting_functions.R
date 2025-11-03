@@ -223,7 +223,7 @@ player_plot = function(dat, lim=NULL, horiz=FALSE, text.cex=1, tofile=FALSE, ...
 #   ... - additional arguments to supply to barplot()
 #
 #   returns: vector of x positions of bars
-contribution_plot = function(dat, tofile=FALSE, ...)
+contribution_plot = function(dat, tofile=FALSE, inverted=FALSE, ...)
 {
   contrib_matrix = matrix(rep(0, length(faction_colors)), ncol=1, byrow=FALSE)
   rownames(contrib_matrix) = names(faction_colors)
@@ -233,7 +233,12 @@ contribution_plot = function(dat, tofile=FALSE, ...)
   {
     event = dat$raw[idx,]
     
-    supported = ifelse(event$action == "ATTACK", toupper(event$attacker), toupper(event$defender))
+    if (inverted)
+      supported = ifelse(event$action == "DEFEND", toupper(event$attacker), toupper(event$defender))
+    else
+      supported = ifelse(event$action == "ATTACK", toupper(event$attacker), toupper(event$defender))
+    
+    if (supported == "NULL") supported = "XX"
     supported_idx = match(supported, names(faction_colors))[1]
     
     if (! event$user %in% colnames(contrib_matrix))
@@ -308,11 +313,17 @@ contribution_plot = function(dat, tofile=FALSE, ...)
   width=2
   xlim = c(0, width * 1.2 * (ncol(ordered_matrix) + 1))
   
+  if (inverted) maintitle = paste("Players' OPPOSITION to factions in battle #", dat$raw$battle[1], sep="")
+  else maintitle = paste("Players' SUPPORT to factions in battle #", dat$raw$battle[1], sep="")
+  
+  if (inverted) subtitle = "(Team \"XX\" in black is none of the teams, this occurs when someone defends a tile while no one is attacking it)"
+  else subtitle = ""
+  
   if (tofile != FALSE) png(tofile, 1280, 720)
   positions = barplot(ordered_matrix, col=barcolors,
                       ylim=ylim, xlim=xlim, width=width,
-                      main=bquote(atop(paste("Players' support to factions in battle #", .(dat$raw$battle[1]), sep=""), scriptstyle("(IP spent, before bonuses)") )),
-                      axes=FALSE, las=1, srt=35, axisnames=FALSE, ...)
+                      main=bquote(atop(.(maintitle), scriptstyle("(IP spent, before bonuses)") )),
+                      sub = bquote(scriptstyle(.(subtitle))), axes=FALSE, las=1, srt=35, axisnames=FALSE, ...)
   
   bardist = positions[2] - positions[1]
   tickdist = round(vmax*1.1/15, digits=-3)

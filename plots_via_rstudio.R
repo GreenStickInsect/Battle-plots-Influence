@@ -38,7 +38,8 @@ setwd(directory)
 # RGB (in hex) colors of each team
 faction_colors = data.frame(CI="#1aa44f", MT="#fc8c36", DC="#3f5fde",
                             PS="#beff64", BB="#ff496c", FG="#0099ff",
-                            CO="#9c6aff", CR="#b20000", NO_TEAM="#303030")
+                            CO="#9c6aff", CR="#b20000", NO_TEAM="#303030",
+                            XX="#303030")
 
 
 ### Generate datasets ###
@@ -129,6 +130,10 @@ rm(s, text.cex) # cleanup
 # Which teams did every player help
 if (! export) {contribution_plot(sets$ALL)
 } else contribution_plot(sets$ALL, tofile="Contribplot.png")
+
+# Which teams did every player oppose (fight against)
+if (! export) {contribution_plot(sets$ALL, inverted=TRUE)
+} else contribution_plot(sets$ALL, tofile="Oppositionplot.png", inverted=TRUE)
 
 ## Bonuses plot
 
