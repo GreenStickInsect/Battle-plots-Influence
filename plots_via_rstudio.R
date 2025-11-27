@@ -14,6 +14,19 @@ source("data_functions.R")
 # source plotting functions
 source("plotting_functions.R")
 
+ggplotgraphics = FALSE
+if (require("ggplot2"))
+{
+  ggplotgraphics = TRUE
+  library(ggplot2)
+  
+  source("plotting_ggplot.R")
+} else
+{
+  cat("WARNING: Library ggplot2 is not installed.
+      Some plots cannot be drawn without it and will be skipped or replaced with simpler version.\n")
+}
+
 ### Manually changed variables ###
 
 # Change as needed - this is a directory in which data files are and where plots will be generated
@@ -35,7 +48,7 @@ export = FALSE
 ### Preparations ###
 setwd(directory)
 
-# RGB (in hex) colors of each team
+# RGB (in hex) colors of each team. This also serves as a declaration of known teams.
 faction_colors = data.frame(CI="#1aa44f", MT="#fc8c36", DC="#3f5fde",
                             PS="#beff64", BB="#ff496c", FG="#0099ff",
                             CO="#9c6aff", CR="#b20000", NO_TEAM="#303030",
@@ -51,16 +64,17 @@ if (file.access(battleinfofile)[1] == 0)
   battleinfo = read_battle_data("battleinfo.txt") # see data processing source file
 } else
 {
-  battleinfo = list(number=NA_integer_, place=NA_character_, attacker=NA_character_, defender=NA_character_,
-                    winner=NA_character_, start=NA_integer_, end=NA_integer_)
+  battleinfo = list()
+  #battleinfo = list(number=NA_integer_, place=NA_character_, attacker=NA_character_, defender=NA_character_,
+  #                  winner=NA_character_, start=NA_integer_, end=NA_integer_)
 }
 
 ## If some of data is missing, try to guess it
 # WARNING: battle length is then set arbitrarily. Old battles always lasted 48-49 hours,
 #          but if you have data from battle which lasted different amount of time AND does not
 #          have battle info file - you need to tweak this manually.
-if ( !(is.null(battleinfo$start) | !is.na(battleinfo$start)) &&
-     !(is.null(battleinfo$end) | !is.na(battleinfo$end)))
+if ( ! is.null(battleinfo$start) &
+     ! is.null(battleinfo$end))
 {
   battleinfo$battle_length = ceiling((battleinfo$end - battleinfo$start) / 60 / 60) # hours
 } else
@@ -125,6 +139,14 @@ for (s in sets)
 }
 rm(s, text.cex) # cleanup
 
+## Team plot
+
+# Compare summary scores of each team.
+#
+# Internally utilizes the "vsplot" function.
+if (!export) {teamplot(sets)
+} else teamplot(sets, tofile="Teamplot.png")
+
 ## Contribution plot
 
 # Which teams did every player help
@@ -156,9 +178,18 @@ if (! export) {scaleplot(sets$ALL)
 
 # Compares IP, DirectPlay and Discord BIP usage across whole battle.
 #
-# Internally utilizes the "vsplot" function.
-if (! export) {sourceplot(sets$ALL)
-} else sourceplot(sets$ALL, tofile="Sourceplot.png")
+# Simple version utilizes the "vsplot" function internally.
+
+if (ggplotgraphics)
+{ # Pie chart (requires ggplot2)
+  if (! export) {sourceplot_piechart(sets$ALL, battleinfo)
+  } else sourceplot_piechart(sets$ALL, battleinfo, tofile="Sourceplot_pie.png")
+  
+} else
+{ # Simple version
+  if (! export) {sourceplot(sets$ALL)
+  } else sourceplot(sets$ALL, tofile="Sourceplot.png")
+}
 
 ## Timeline
 
@@ -174,6 +205,6 @@ if (! export) {timeline(sets, battleinfo)
 # if (! export) {vsfile = FALSE
 # } else vsfile = "VSplot.png"
 # vsplot(teams=list(deltans=rbind(sets$BB$per_player, sets$DC$per_player), protectors=sets$PS$per_player),
-#        names=c("Deltans", "Protectors"), tofile=vsfile)
+#        teamnames=c("Deltans", "Protectors"), tofile=vsfile)
 
 export = FALSE # Make sure this remains false after execution, we don't want to generate files by accident
