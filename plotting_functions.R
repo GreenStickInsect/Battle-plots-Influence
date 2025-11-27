@@ -558,12 +558,36 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
   ttl = teamnames[[1]]
   for (name in teamnames[-1]) { ttl = paste(ttl, "vs", name) }
   
-  # Auto writing to file utility
+  
+  ## Handling argument overwriting through ellipsis
+  barplot_args = list(height=stacked,
+                      col=bcols,
+                      ylim=ylim,
+                      names.arg=teamsdf$name,
+                      axes=FALSE,
+                      main=ttl,
+                      horiz=FALSE)
+  
+  ellipsis = list(...)
+  if ("height" %in% names(ellipsis)) warning("Warning: vsplot: Argument \"height\" for barplot is being overwritten by specified ellipsis (... argument). This is not an intended way to use vsplot.")
+  if ("log" %in% names(ellipsis) &&
+      ellipsis[["log"]] != "") stop("Error: vsplot: vsplot does not support logarithmic axes!")
+  
+  for (arg in names(barplot_args))
+  {
+    if (arg %in% names(ellipsis))
+    {
+      barplot_args[[arg]] = ellipsis[[arg]]
+      ellipsis = ellipsis[-which(names(ellipsis) == arg)]
+    }
+  }
+  
+  
+  ## Auto writing to file utility
   if (tofile != FALSE) png(tofile, 1280, 720)
   
-  # Bars
-  positions = barplot(stacked, col=bcols, ylim=ylim, names.arg=teamsdf$name, axes=FALSE,
-                      main=ttl, horiz=FALSE, ...)
+  # Draw bars (through do.call, so that we could use arguments stored in a list)
+  positions = do.call(barplot, args=c(barplot_args, ellipsis))
   
   # Player name labels for each team
   for (i in seq(length(teams)))
@@ -590,6 +614,8 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
 #   dat - A dataset.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to vsplot().
+#
+#   returns: a list with some of parameters used to draw the plot, as returned by vsplot.
 nexplot = function(dat, tofile=FALSE, ...)
 {
   nexpos = which(dat$per_player$name == "Nex")
@@ -597,13 +623,16 @@ nexplot = function(dat, tofile=FALSE, ...)
   datanex = dat$per_player[nexpos,] # Nex
   dataothers = dat$per_player[-nexpos,] # Everyone except Nex
   
-  vsplot(datanex, dataothers, c("One man army", "Others"), tofile=tofile, ...)
+  data=vsplot(datanex, dataothers, c("One man army", "Others"), tofile=tofile, ...)
+  return(invisible(data))
 }
 
 # A variant of vsplot which compares total usage of IP, DirectPlay and BIP.
 #   dat - A dataset.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to vsplot().
+#
+#   returns: a list with some of parameters used to draw the plot, as returned by vsplot.
 sourceplot = function(dat, tofile=FALSE, ...)
 {
   ipdata = dat$per_player
@@ -651,6 +680,8 @@ sourceplot = function(dat, tofile=FALSE, ...)
     print(positions)
     dev.off()
   }
+  
+  return(invisible(data))
 }
 
 # A variant of vsplot which compares balanced (in terms of total IP spent) teams of few best and all other players.
@@ -658,6 +689,8 @@ sourceplot = function(dat, tofile=FALSE, ...)
 #   dat - A dataset.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to vsplot().
+#
+#   returns: a list with some of parameters used to draw the plot, as returned by vsplot.
 scaleplot = function(dat, tofile=FALSE, ...)
 {
   lower = dat$per_player[-1,]
@@ -669,8 +702,34 @@ scaleplot = function(dat, tofile=FALSE, ...)
     lower = lower[-1,]
   }
   
-  vsplot(list(top=upper, rest=lower), c(paste("Top scorers (", nrow(upper), ")", sep=""),
+  data=vsplot(list(top=upper, rest=lower), c(paste("Top scorers (", nrow(upper), ")", sep=""),
                                         paste("All others (", nrow(lower), ")", sep="")), tofile=tofile, ...)
+  return(invisible(data))
+}
+
+# A variant of vsplot which compares summary scores of teams.
+#   sets - A list of datasets corresponding to each team.
+#   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
+#   ... - additional arguments to supply to vsplot().
+#
+#   returns: a list with some of parameters used to draw the plot, as returned by vsplot.
+teamplot = function(sets, tofile=FALSE, ...)
+{
+  teams = sets[-which(names(sets)=="ALL")]
+  teamsumscores = c()
+  for (team in teams)
+  {
+    teamsumscores = c(teamsumscores, sum(team$per_player$sumUsed))
+  }
+  names(teamsumscores) = names(teams)
+  
+  ord = order(teamsumscores, decreasing=TRUE)
+  teams = teams[ord]
+  teamsumscores = teamsumscores[ord]
+  
+  data=vsplot(teams=lapply(teams, function(x){x$per_player}), teamnames = names(teams), tofile=tofile,
+              main = "Combined score of each faction", ...)
+  return(invisible(data))
 }
 
 # Draws a line chart visualizing scores of each team depending on time (each hour of the battle).
@@ -679,17 +738,23 @@ scaleplot = function(dat, tofile=FALSE, ...)
 #                It is recommended to supply it with at least "start" (timestamp) and "battle_length" (number of hours) fields, if available.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to plot().
-timeline = function(sets, battleinfo, tofile=FALSE, ...)
+timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
 {
-  if (!(is.null(battleinfo$start) | is.na(battleinfo$start))) start = battleinfo$start
+  if (! is.null(battleinfo$start)) start = battleinfo$start
   else start = min(sets$ALL$raw$timestamp)
+  
+  if (! is.null(battleinfo$end)) end = battleinfo$end
+  else end = max(sets$ALL$raw$timestamp)
+  
+  if (! is.null(battleinfo$battle_length)) battle_length = battleinfo$battle_length
+  else battle_length = ceiling((end - start) / 60 / 60)
   
   max_val = 0
   timelines = list(none=list(name="", color="", per_hour=list()))
   for (faction in sets)
   {
-    per_hour = as.list(rep(0, battleinfo$battle_length))
-    names(per_hour) = seq(1, battleinfo$battle_length)
+    per_hour = as.list(rep(0, battle_length))
+    names(per_hour) = seq(1, battle_length)
     
     for (i in seq(1, length(faction$raw$user)))
     {
@@ -707,17 +772,17 @@ timeline = function(sets, battleinfo, tofile=FALSE, ...)
   
   if (tofile != FALSE) png(tofile, 1920, 1080)
   
-  out = plot(names(per_hour), y=NULL, type="n", xlim=c(0, battleinfo$battle_length), ylim=c(0, top_lim),
+  out = plot(names(per_hour), y=NULL, type="n", xlim=c(0, battle_length), ylim=c(0, top_lim),
              main=bquote(atop(paste("Timeline of battle #", .(sets$ALL$raw$battle[[1]]), sep=""), scriptstyle("(IP spent, before bonuses)"))),
              xlab="", ylab="IP", axes=FALSE)
   
   ax_names = c()
-  for (i in seq(0, battleinfo$battle_length))
+  for (i in seq(0, battle_length))
   {
-    ax_names = c(ax_names, as.expression(bquote( scriptstyle(.(format(as.POSIXct(battleinfo$start+3600*i, tz="UTC", origin="1970-01-01"),
-                                                                      format="%H:%m"))) )))
+    ax_names = c(ax_names, as.expression(bquote( scriptstyle(.(format(as.POSIXct(start+3600*i, tz="UTC", origin="1970-01-01"),
+                                                                      format="%H:%M"))) )))
   }
-  axis(1, at=c(0, names(per_hour)), lty="solid", labels=seq(0, battleinfo$battle_length), line=0)
+  axis(1, at=c(0, names(per_hour)), lty="solid", labels=seq(0, battle_length), line=0)
   axis(1, at=c(0, names(per_hour)), lty="solid", labels=ax_names, line=1, tick=FALSE)
   axis(2, at=seq(0, max_val*1.1, by=round(max_val*1.1/15, digits=-3)), labels=format(seq(0, max_val*1.1, by=round(max_val*1.1/15, digits=-3)), scientific=FALSE),
        lty="solid", las=2, line=-2, cex.axis=1)
@@ -729,7 +794,7 @@ timeline = function(sets, battleinfo, tofile=FALSE, ...)
   {
     model = loess(value ~ hour,
                   data.frame(value = unlist(timelines[[i]]$per_hour), hour = names(per_hour)), span=0.1)
-    newdata = data.frame(hour=seq(1, battleinfo$battle_length, by=0.25))
+    newdata = data.frame(hour=seq(1, battle_length, by=0.25))
     p = predict(model, newdata)
     
     for (j in seq(1, length(p)))
@@ -741,15 +806,15 @@ timeline = function(sets, battleinfo, tofile=FALSE, ...)
     }
     
     par(new=TRUE)
-    plot(c(0, newdata$hour), c(0, p), type="l", xlim=c(0, battleinfo$battle_length), ylim=c(0, top_lim), main="",
+    plot(c(0, newdata$hour), c(0, p), type="l", xlim=c(0, battle_length), ylim=c(0, top_lim), main="",
          xlab="", ylab="", axes=FALSE, col=timelines[[i]]$color, lwd=3)
   }
   
-  segments(seq(0, battleinfo$battle_length, by=8), 0,
-           seq(0, battleinfo$battle_length, by=8), max_val*1.1,
+  segments(seq(0, battle_length, by=8), 0,
+           seq(0, battle_length, by=8), max_val*1.1,
            col="gray40", lty="dashed")
   
-  #rect(-1, max_val*1.15, battleinfo$battle_length, max_val*1.4, col="white", border="white")
+  #rect(-1, max_val*1.15, battle_length, max_val*1.4, col="white", border="white")
   cols = c()
   faction_names = c()
   for (faction in sets)
@@ -757,7 +822,7 @@ timeline = function(sets, battleinfo, tofile=FALSE, ...)
     cols = c(cols, faction$color)
     faction_names = c(faction_names, faction$faction)
   }
-  legend(battleinfo$battle_length, top_lim*1, faction_names, fill=cols, xjust=1, yjust=1, ncol=3, cex=1,
+  legend(battle_length, top_lim*1, faction_names, fill=cols, xjust=1, yjust=1, ncol=3, cex=1,
          x.intersp=0.6, y.intersp=0.8)
   
   if (tofile != FALSE)
