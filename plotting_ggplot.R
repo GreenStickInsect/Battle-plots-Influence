@@ -85,5 +85,5 @@ sourceplot_piechart = function(dat, battleinfo=NULL, tofile=FALSE)
   {
     dev.off()
   }
-  return(plt)
+  return(invisible(plt))
 }

@@ -183,7 +183,7 @@ if (! export) {scaleplot(sets$ALL)
 if (ggplotgraphics)
 { # Pie chart (requires ggplot2)
   if (! export) {sourceplot_piechart(sets$ALL, battleinfo)
-  } else sourceplot(sets$ALL, battleinfo, tofile="Sourceplot_pie.png")
+  } else sourceplot_piechart(sets$ALL, battleinfo, tofile="Sourceplot_pie.png")
   
 } else
 { # Simple version
