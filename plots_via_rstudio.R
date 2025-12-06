@@ -191,6 +191,13 @@ if (ggplotgraphics)
   } else sourceplot(sets$ALL, tofile="Sourceplot.png")
 }
 
+## Hit density across a cycle
+if (ggplotgraphics) # Requires ggplot2
+{
+  if (! export) {hitdensity(sets$ALL, battleinfo)
+  } else hitdensity(sets$ALL, battleinfo, tofile="HitDensity.png")
+}
+
 ## Timeline
 
 # Visualizes performance of each team over time
