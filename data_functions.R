@@ -12,7 +12,7 @@
 #   data - data.frame to sort
 #   by - numerical column by which to sort
 #
-#   returns: sorted data.frame
+#   returns: sorted data.frame.
 datasort = function(data, by="sumUsed")
 {
   data = data[order(data[,by], decreasing=TRUE), ]
@@ -28,7 +28,7 @@ datasort = function(data, by="sumUsed")
 #
 #   returns: list of same length as x,
 #            the i-th element of which contains the vector of splits of x[i],
-#            excluding empty strings
+#            excluding empty strings.
 betterstrsplit = function(string, split)
 {
   x = strsplit(string, split)
@@ -45,7 +45,7 @@ betterstrsplit = function(string, split)
 # (the one containing general info such as battle number, start time, etc.)
 #   filename - path to the file to be read
 #
-#   returns: list containing fields with info typically found in such files
+#   returns: list containing fields with info typically found in such files.
 read_battle_data = function(filename)
 {
   data = readChar(filename, file.info(filename)$size)
@@ -70,11 +70,101 @@ read_battle_data = function(filename)
   return(battledata)
 }
 
+
+# A function taking in battle info (data) list and filling in (required) missing fields.
+# Some fields will be guessed based on raw log of battle events, some filled in with placeholders.
+# Vector with names of required fields can be specified.
+#   battleinfo - original battleinfo list. (list)
+#   required - (optional) vector with names of fields which should appear in output list. (defaults to all) (vector of character)
+#   rawset - (optional) data.frame with raw battle events, as read from the .csv . If not supplied, some fields cannot be guessed and will remain NULL. (data.frame)
+#   warn - (optional) whether to send warnings if a field cannot be guessed. (defaults to TRUE) (bool)
+#
+#   returns: a list.
+prepare_battleinfo = function(battleinfo, required=c("all"), rawset=NULL, warn=TRUE)
+{
+  info = list()
+  
+  if ("all" %in% required)
+  {
+    required = c(required, "start", "end", "battle_length", "number", "place", "attacker",
+                 "defender", "winner")
+  }
+  
+  if ("start" %in% required | "battle_length" %in% required)
+  {
+    if ( all(is.null(rawset)) & warn) warning("Warning: prepare_battleinfo: `start` or `battle_length` is required but rawset was not supplied, might return NULL!")
+    
+    if (! is.null(battleinfo$start)) info$start = battleinfo$start
+    else if (! all(is.null(rawset)) ) info$start = min(rawset$timestamp)
+  }
+  
+  if ("end" %in% required | "battle_length" %in% required)
+  {
+    if ( all(is.null(rawset)) & warn ) warning("Warning: prepare_battleinfo: `end` or `battle_length` is required but rawset was not supplied, might return NULL!")
+    
+    if (! is.null(battleinfo$end)) info$end = battleinfo$end
+    else if (! all(is.null(rawset)) ) info$end = max(rawset$timestamp)
+  }
+  
+  if ("battle_length" %in% required)
+  {
+    if (! is.null(battleinfo$battle_length)) info$battle_length = battleinfo$battle_length
+    else if (! (is.null(info$start) | is.null(info$end)) ) info$battle_length = ceiling((info$end - info$start) / 60 / 60)
+  }
+  
+  if ("number" %in% required)
+  {
+    if ( all(is.null(rawset)) & warn ) warning("Warning: prepare_battleinfo: `number` is required but rawset was not supplied, might return NULL!")
+    
+    if (! is.null(battleinfo$number) ) info$number = battleinfo$number
+    else if (! all(is.null(rawset)) ) info$number = rawset$battle[1]
+  }
+  
+  if ("place" %in% required)
+  {
+    if ( all(is.null(rawset)) & warn ) warning("Warning: prepare_battleinfo: `place` is required but rawset was not supplied, might return NULL!")
+    
+    if (! is.null(battleinfo$place) ) info$place = battleinfo$place
+    else if (! all(is.null(rawset)) )
+    {
+      # this monster returns number of occurrences of each land in the events
+      t=table(vapply(strsplit(sets$ALL$raw$tileId, "-"), function(vect) {return(vect[1])}, c(""), USE.NAMES=F))
+      
+      info$place = names(t)[which(t == max(t))]
+    }
+    
+    if (! is.null(info$place)) info$place = tools::toTitleCase(gsub("_", " ", info$place))
+  }
+  
+  if ("attacker" %in% required)
+  {
+    if (! is.null(battleinfo$attacker) ) info$attacker = battleinfo$attacker
+    else info$attacker = "XX" # There is no reliable way to guess that
+  }
+  
+  if ("defender" %in% required)
+  {
+    if (! is.null(battleinfo$defender) ) info$defender = battleinfo$defender
+    else info$defender = "XX" # There is no reliable way to guess that
+  }
+  
+  if ("winner" %in% required)
+  {
+    if (! is.null(battleinfo$winner) ) info$winner = battleinfo$winner
+    else info$winner = "XX" # There is no reliable way to guess that
+  }
+  
+  return(info)
+}
+
+
 # Reads data from ip spend file and creates a dataset from it.
+# Note: output dataset is missing a per_player field, create it manually with prepare_per_player()
+
 # Dataset format is list of:
 #   faction - name of team which this dataset belongs to
-#   color - color of the above team
-#   raw - A data.frame with following columns:
+#   color - color of said team
+#   raw - A data.frame with following columns: (these might vary depending on file contents)
 #     battle - battle number (numeric)
 #     timestamp - Unix timestamp of this event (numeric)
 #     name - username (non-unique) of player who triggered this event (character)
@@ -101,8 +191,8 @@ read_battle_data = function(filename)
 #     ipApplied - total IP applied to tile (after bonuses) (numeric)
 #     faction - name of team player belongs to (character)
 #     color - RGB (in hex) color of team the player belongs to (character)
-#     
-#
+     
+
 # Arguments:
 #   filename - path to the file to be read
 #

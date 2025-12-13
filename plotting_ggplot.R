@@ -4,7 +4,7 @@
 ## This file contains functions handling the drawing of advanced plots which require ggplot2.
 # Do not run this file directly, instead, source() it.
 
-# Some of the functions provided might depend on functions,
+# Some of the functions defined might depend on functions,
 # which you need to source() from "data_functions.R"
 
 # Please be aware, following functions are often not designed to fail gracefully if invalid data is supplied.
@@ -20,6 +20,7 @@ theme_piechart = theme_standard +
   theme(panel.grid = element_blank(), axis.text=element_text(size=rel(1), face="bold"),
         axis.title = element_blank())
 
+
 # Draws a pie chart which compares usage of Influence IP, Direct Play and Discord BIP.
 #   dat - A dataset.
 #   battleinfo - An (optional) list of additional info about the battle, usually published along with IP spend data.
@@ -34,8 +35,7 @@ sourceplot_piechart = function(dat, battleinfo=NULL, tofile=FALSE)
   #
   # PS No, this is not optimized, I got it to a roughly working version, quit, and hope I won't need to come back
   
-  if (! is.null(battleinfo$number) ) battle_num = battleinfo$number
-  else battle_num = dat$raw$battle[1]
+  info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
   
   num_p = nrow(dat$per_player)
   
@@ -138,7 +138,7 @@ sourceplot_piechart = function(dat, battleinfo=NULL, tofile=FALSE)
                           color=label_cols)+
                 scale_y_continuous(breaks=pos, labels=num_labels) +
                 labs(title="Comparison of IP, Direct Play and Discord BIP usage",
-                     subtitle=paste("in battle #", battle_num, sep=""))
+                     subtitle=paste("battle #", info$number, " in ", info$place, sep=""))
   
   print(plt)
   options(warn=oldw)
@@ -150,19 +150,16 @@ sourceplot_piechart = function(dat, battleinfo=NULL, tofile=FALSE)
   return(invisible(plt))
 }
 
+
+# Draws a density plot of hits within a cycle (per minute).
+#   dat - A dataset.
+#   battleinfo - An (optional) list of additional info about the battle, usually published along with IP spend data.
+#   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
+#
+#   returns: a ggplot object which was used to draw the plot
 hitdensity = function(dat, battleinfo=NULL, tofile=FALSE)
 {
-  if (! is.null(battleinfo$number) ) battle_num = battleinfo$number
-  else battle_num = dat$raw$battle[1]
-  
-  if (! is.null(battleinfo$start)) start = battleinfo$start
-  else start = min(dat$raw$timestamp)
-  
-  if (! is.null(battleinfo$end)) end = battleinfo$end
-  else end = max(dat$raw$timestamp)
-  
-  if (! is.null(battleinfo$battle_length)) battle_length = battleinfo$battle_length
-  else battle_length = ceiling((end - start) / 60 / 60)
+  info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
   
   minutes = c()
   types = c()
@@ -195,7 +192,7 @@ hitdensity = function(dat, battleinfo=NULL, tofile=FALSE)
     scale_color_manual("Hit method", values=c("Any"="gray20","Manual"="orange2", "Direct Play"="blue2"),
                        limits=c("Any", "Manual", "Direct Play")) +
     scale_x_continuous(breaks=seq(2,60,2), labels = xlabs) +
-    labs(title="Density of hits across a cycle", subtitle=paste0("in battle #", battle_num)) +
+    labs(title="Density of hits across a cycle", subtitle=paste0("battle #", info$number, " in ", info$place)) +
     xlab("Minute of a cycle") +
     ylab("Density") +
     theme_standard
