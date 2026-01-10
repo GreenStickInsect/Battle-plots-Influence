@@ -234,7 +234,7 @@ player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, 
 #   ... - additional arguments to supply to barplot()
 #
 #   returns: vector of x positions of bars
-contribution_plot = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALSE, ...)
+contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALSE, ...)
 {
   info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
   
@@ -387,6 +387,7 @@ contribution_plot = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALSE,
   
   return(invisible(positions))
 }
+contribution_plot = ensure_isolation(contribution_plot__, "contribution_plot") # Just a tiny safety-ensuring wrapper, see data_functions.R
 
 # Draws a bar plot with average score bonus which each player benefited from.
 # Note: The bonus is calculated by dividing applied IP by used IP.
@@ -399,7 +400,7 @@ contribution_plot = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALSE,
 #   text.cex - numeric character expansion vector for text().
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to barplot()
-bonusplot = function(allset, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, tofile=FALSE, ...)
+bonusplot__ = function(allset, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, tofile=FALSE, ...)
 {
   info = prepare_battleinfo(battleinfo, required=c("number", "place"), allset$raw)
   
@@ -451,6 +452,7 @@ bonusplot = function(allset, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1,
     dev.off()
   }
 }
+bonusplot = ensure_isolation(bonusplot__, "bonusplot") # Just a tiny safety-ensuring wrapper, see data_functions.R
 
 # A highly customizable function, which draws a bar plot comparing scores of user-defined "teams" of players.
 # Each team will receive its own stacked bar (made up of sections corresponding to each of team members).
@@ -490,7 +492,7 @@ bonusplot = function(allset, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1,
 #
 #   vsplot(teams = teams, teamnames = c("Best Player", "Worst Player"), textcols = NA,
 #          tofile = "Best-worstplot.png", density=25, main=bquote(atop("Best and worst players", "of PS and BB")))
-vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=list(NA_character_, NA_character_), tofile=FALSE, ...)
+vsplot__ = function(teams, teamnames=list(NA_character_, NA_character_), textcols=list(NA_character_, NA_character_), tofile=FALSE, ...)
 {
   teams = as.list(teams)
   teamnames = as.list(teamnames)
@@ -531,7 +533,7 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
   ylim = c(vmin, vmax + (vmax-vmin)*0.3)
   
   # Prepare label positions for each bar
-  labposlst = list(null=c())
+  labposlst = list(null=list())
   pnamelabs = list(null=list())
   for (i in seq(length(teams)))
   {
@@ -546,7 +548,7 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
     } else if (length(csum) == 1)
     {
       labpos = c(csum[1] - (csum[1] - ylim[1])/2)
-    } else labpos = c()
+    } else labpos = numeric(0)
     
     labposlst[[ teamnames[[i]] ]] = labpos
     pnamelabs[[ teamnames[[i]] ]] = cteam$name[which(cteam$sumUsed >= max(teamsdf$sumUsed)*0.02)]
@@ -641,6 +643,7 @@ vsplot = function(teams, teamnames=list(NA_character_, NA_character_), textcols=
   }
   return(invisible(list(matr=stacked, labels=pnamelabs, labelpos=labposlst, labelcol=textcols, ylim=ylim)))
 }
+vsplot = ensure_isolation(vsplot__, "vsplot") # Just a tiny safety-ensuring wrapper, see data_functions.R
 
 # A variant of vsplot which compares player Nex to all other players.
 #   dat - A dataset.

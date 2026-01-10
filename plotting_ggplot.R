@@ -27,7 +27,7 @@ theme_piechart = theme_standard +
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #
 #   returns: a ggplot object which was used to draw the chart
-sourceplot_piechart = function(dat, battleinfo=NULL, tofile=FALSE)
+sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
 {
   # The following is basically dark magic practiced through trial and error,
   # because ggplot2 is TERRIBLY documented and does VERY WEIRD things to data, for no apparent reason.
@@ -149,6 +149,7 @@ sourceplot_piechart = function(dat, battleinfo=NULL, tofile=FALSE)
   }
   return(invisible(plt))
 }
+sourceplot_piechart = ensure_isolation(sourceplot_piechart__, "sourceplot_piechart") # Just a tiny safety-ensuring wrapper, see data_functions.R
 
 
 # Draws a density plot of hits within a cycle (per minute).
