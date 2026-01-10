@@ -8,6 +8,57 @@
 # Use with care.
 
 
+# A decorator which guarantees that global R settings remain unchanged by the wrapped function,
+# even if an error occurs in the course of its execution.
+#   f - Function to wrap
+#   fname - Name of function to use in error messages. Set to name of wrapper (output)
+#           if you don't mind whoever attempts fixing the error to first stumble upon
+#           this decorator. Set to name of wrapped (original) function to point them straight there.
+#           Or, well, just write whatever, if you want chaotic and unhelpful error messages. :evil_smile:
+#
+#   returns: wrapper function.
+ensure_isolation = function(f, fname)
+{
+  wrapper = function(...)
+  {
+    # Save original settings
+    p = par(no.readonly = TRUE) # No point trying to restore settings which cannot be edited anyway
+    o = options()
+    
+    # Welcome to the world of forbidden arts and dark magic!
+    #
+    # This obscure thing ahead catches any error which might occur in wrapped function,
+    # restores original settings, then changes the error message to
+    # mislead any receiver of said message into thinking that
+    # no wrapping or interceptions took place at all, (we need to stay in the shadows)
+    # and finally, itself throws this masterpiece of deception.
+    #
+    # Oh, and in the boring case of no errors, just intercepts the result along
+    # with info whether it was returned via invisible()
+    tryCatch(
+      {result = withVisible(f(...))},
+      error = function(e)
+      {
+        par(p)
+        options(o)
+
+        e$call = do.call(call, c(list(fname), ...))
+        stop(e)
+      }
+    )
+    
+    # Restore original settings
+    par(p)
+    options(o)
+    
+    # Return result invisibly or not, depending on what the original function did
+    if (result$visible) return(result$value)
+    else return(invisible(result$value))
+  }
+  
+  return(wrapper)
+}
+
 # Sorts rows of a data frame by numerical values in specified column.
 #   data - data.frame to sort
 #   by - numerical column by which to sort
