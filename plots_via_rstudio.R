@@ -57,7 +57,7 @@ battleinfofile = "battleinfo.txt"
 #
 # Note: output file names are defined in the drawing code below, separately for each plot.
 # You can change them if you wish.
-export = FALSE
+export = F
 
 
 # RGB (in hex) colors of each team. This also serves as a declaration of known teams and their names.
@@ -116,7 +116,10 @@ if ( ! is.null(battleinfo$start) &
 nonesets = list(null=list())
 for (i in seq(length(filenames)))
 {
-  tmp = prepare_someset(filenames[i])
+  # A "pipeline" function internally running several data reading and preparation functions.
+  # Details can be found in data_functions.R
+  tmp = read_and_reformat_dataset(filenames[i])
+  
   nonesets[[paste("None",i,sep="")]] = tmp
 }
 rm(i, tmp) # clean up
@@ -239,6 +242,15 @@ if (ggplotgraphics) # Requires ggplot2
 # Visualizes performance of each team over time
 if (! export) {timeline(sets, battleinfo)
 } else timeline(sets, battleinfo, tofile="Timeline.png")
+
+## CR plot (if this is CR battle)
+
+# Compares CR score to total score of all other players
+if (battleinfo$attacker == "cr" | battleinfo$defender == "cr")
+{
+  if (! export) {nexplot(sets$ALL, "cr", c("The Evil Force", "Stubborn Prey"))
+  } else nexplot(sets$ALL, "cr", c("The Evil Force", "Stubborn Prey"), tofile="CRPlot.png")
+}
 
 
 ## Custom vsplot
