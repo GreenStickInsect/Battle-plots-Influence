@@ -21,7 +21,7 @@ theme_piechart = theme_standard +
         axis.title = element_blank())
 
 
-# Draws a pie chart which compares usage of Influence IP, Direct Play and Discord BIP.
+# Draws a pie chart which compares usage of various playing methods.
 #   dat - A dataset.
 #   battleinfo - An (optional) list of additional info about the battle, usually published along with IP spend data.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
@@ -37,14 +37,21 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
   
   info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
   
-  num_p = nrow(dat$per_player)
+  # This plot does not include data from automatic bot attacks,
+  # so bot users are filtered out.
+  # After all, they use none of the usual playing methods
+  cleanplayers = dat$per_player[which(dat$per_player$bot == FALSE),]
   
-  ipdata = dat$per_player
-  dpdata = dat$per_player
-  bipdata = dat$per_player
+  num_p = nrow(cleanplayers)
+  
+  ipdata = cleanplayers
+  dpdata = cleanplayers
+  ppdata = cleanplayers
+  bipdata = cleanplayers
   
   ipdata$bipUsed = rep(0, length(ipdata$bipUsed))
   ipdata$DPUsed = rep(0, length(ipdata$DPUsed))
+  ipdata$PPUsed = rep(0, length(ipdata$PPUsed))
   ipdata$sumUsed = ipdata$ipUsed
   
   ipdata = ipdata[order(ipdata$sumUsed),]
@@ -52,6 +59,7 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
   
   dpdata$ipUsed = rep(0, length(dpdata$ipUsed))
   dpdata$bipUsed = rep(0, length(dpdata$bipUsed))
+  dpdata$PPUsed = rep(0, length(dpdata$PPUsed))
   dpdata$sumUsed = dpdata$DPUsed
   
   dpdata = dpdata[order(dpdata$sumUsed),]
@@ -59,27 +67,37 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
   
   bipdata$ipUsed = rep(0, length(bipdata$ipUsed))
   bipdata$DPUsed = rep(0, length(bipdata$DPUsed))
+  bipdata$PPUsed = rep(0, length(bipdata$PPUsed))
   bipdata$sumUsed = bipdata$bipUsed
   
   bipdata = bipdata[order(bipdata$sumUsed),]
   bipdata_rev = bipdata[order(bipdata$sumUsed, decreasing=TRUE),]
   
-  sumvalues = c(sum(ipdata$sumUsed), sum(dpdata$sumUsed), sum(bipdata$sumUsed))
-  values = c(ipdata$sumUsed, dpdata$sumUsed, bipdata$sumUsed)
-  values_group_rev = c(ipdata_rev$sumUsed, dpdata_rev$sumUsed, bipdata_rev$sumUsed)
+  ppdata$ipUsed = rep(0, length(ppdata$ipUsed))
+  ppdata$DPUsed = rep(0, length(ppdata$DPUsed))
+  ppdata$bipUsed = rep(0, length(ppdata$bipUsed))
+  ppdata$sumUsed = ppdata$PPUsed
+  
+  ppdata = ppdata[order(ppdata$sumUsed),]
+  ppdata_rev = ppdata[order(ppdata$sumUsed, decreasing=TRUE),]
+  
+  sumvalues = c(sum(ipdata$sumUsed), sum(dpdata$sumUsed), sum(ppdata$sumUsed), sum(bipdata$sumUsed))
+  values = c(ipdata$sumUsed, dpdata$sumUsed, ppdata$sumUsed, bipdata$sumUsed)
+  values_group_rev = c(ipdata_rev$sumUsed, dpdata_rev$sumUsed, ppdata_rev$sumUsed, bipdata_rev$sumUsed)
 
-  groups = c("Influence IP", "Direct Play", "Discord BIP")
-  cols = c("Influence IP"="skyblue1", "Direct Play"="blue2", "Discord BIP"="purple1")
+  groups = c("Influence IP", "Direct Play", "Passive Play", "Discord BIP")
+  cols = c("Influence IP"="skyblue1", "Direct Play"="blue2", "Passive Play"="cyan2", "Discord BIP"="purple1")
   data = data.frame(group=factor(rep(groups, each=num_p), groups),
                     value=values)
 
-  full_circle = sum(ipdata$sumUsed) + sum(dpdata$sumUsed) + sum(bipdata$sumUsed)
+  full_circle = sum(ipdata$sumUsed) + sum(dpdata$sumUsed) + sum(ppdata$sumUsed) + sum(bipdata$sumUsed)
   circle_part = values_group_rev/full_circle * 360
   circle_rotation = (cumsum(circle_part) - circle_part/2 + 90)
 
   circle_rotation = c(rev(circle_rotation[1:num_p]),
                       rev(circle_rotation[(num_p+1):(num_p*2)]),
-                      rev(circle_rotation[(num_p*2+1):(num_p*3)]))
+                      rev(circle_rotation[(num_p*2+1):(num_p*3)]),
+                      rev(circle_rotation[(num_p*3+1):(num_p*4)]))
   circle_rotation = ifelse(circle_rotation > 90 & circle_rotation <= 270, circle_rotation+180, circle_rotation)
   
   circle_part2 = sumvalues/full_circle * 360
@@ -88,15 +106,15 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
   
   labels = c()
   label_cols = c()
-  for (dat in list(ipdata, dpdata, bipdata))
+  for (currdat in list(ipdata, dpdata, ppdata, bipdata))
   {
-    namecol = which(colnames(dat) == "name")
-    scorecol = which(colnames(dat) == "sumUsed")
-    colcol = which(colnames(dat) == "color")
-    for (rowi in seq(nrow(dat)))
+    namecol = which(colnames(currdat) == "name")
+    scorecol = which(colnames(currdat) == "sumUsed")
+    colcol = which(colnames(currdat) == "color")
+    for (rowi in seq(nrow(currdat)))
     {
-      labels = c(labels, ifelse(dat[rowi,scorecol] >= full_circle*0.015, dat[rowi,namecol], ""))
-      label_cols = c(label_cols, dat[rowi,colcol])
+      labels = c(labels, ifelse(currdat[rowi,scorecol] >= full_circle*0.015, currdat[rowi,namecol], ""))
+      label_cols = c(label_cols, currdat[rowi,colcol])
     }
   }
   
@@ -137,7 +155,7 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
                           position = position_stack(vjust=0.5), srt=circle_rotation,
                           color=label_cols)+
                 scale_y_continuous(breaks=pos, labels=num_labels) +
-                labs(title="Comparison of IP, Direct Play and Discord BIP usage",
+                labs(title="Comparison of usage of various playing methods",
                      subtitle=paste("battle #", info$number, " in ", info$place, sep=""))
   
   print(plt)
@@ -167,11 +185,16 @@ hitdensity = function(dat, battleinfo=NULL, tofile=FALSE)
   for (i in seq(1, length(dat$raw$user)))
   {
     row = dat$raw[i,]
+    if (row$mode == "PASSIVE_PLAY") next
+    else if (row$mode == "AUTO") next
     
     time = as.POSIXct(row$timestamp, tz="UTC", origin="1970-01-01")
     minute = as.integer(format(time, format="%M")) + 1
 
-    types = c(types, ifelse(row$directPlay, "Direct Play", "Manual"))
+    type = switch(row$mode,
+                  "MANUAL" = "Manual",
+                  "DIRECT_PLAY" = "Direct Play")
+    types = c(types, type)
     types = c(types, "Any")
     minutes = c(minutes, minute, minute)
   }

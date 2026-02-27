@@ -10,6 +10,15 @@
 
 # A decorator which guarantees that global R settings remain unchanged by the wrapped function,
 # even if an error occurs in the course of its execution.
+#
+# Warning - admittedly I do not know how this happens, but calling a function wrapped by this decorator
+# within another plotting function appears to impact the plotting within one of those.
+# (I could not determine whether it is inner or outer)
+# Perhaps wrapping multiple times is confusing R somehow, or I am just missing something.
+# Instead, inside plotting functions you should call unwrapped versions of functions, and then
+# wrap your own function.
+#
+# Arguments:
 #   f - Function to wrap
 #   fname - Name of function to use in error messages. Set to name of wrapper (output)
 #           if you don't mind whoever attempts fixing the error to first stumble upon
@@ -17,7 +26,7 @@
 #           Or, well, just write whatever, if you want chaotic and unhelpful error messages. :evil_smile:
 #
 #   returns: wrapper function.
-ensure_isolation = function(f, fname)
+ensure_isolation = function(f__, fname)
 {
   wrapper = function(...)
   {
@@ -36,13 +45,26 @@ ensure_isolation = function(f, fname)
     # Oh, and in the boring case of no errors, just intercepts the result along
     # with info whether it was returned via invisible()
     tryCatch(
-      {result = withVisible(f(...))},
+      {result = withVisible(f__(...))},
       error = function(e)
       {
         par(p)
         options(o)
 
-        e$call = do.call(call, c(list(fname), ...))
+        for (i in seq(length(e$call)))
+        {
+          if (e$call[i] == call("f__") & e$call[i+1] == call("..."))
+          {
+            e$call[i] = call(fname)
+            arg = list(...)
+            vals = vapply(arg, typeof, character(1), USE.NAMES=F)
+            for (j in seq(length(arg)))
+            {
+              e$call[i+j] = do.call(call, list(vals[j]))
+              names(e$call)[i+j] = names(arg)[j]
+            }
+          }
+        }
         stop(e)
       }
     )
@@ -76,13 +98,14 @@ datasort = function(data, by="sumUsed")
 # Ensures that data produced from splitting does not contain empty strings
 #   string - character vector to split
 #   split - character vector containing regular expression(s) to use for splitting.
+#   ... - additional arguments to supply to strsplit().
 #
 #   returns: list of same length as x,
 #            the i-th element of which contains the vector of splits of x[i],
 #            excluding empty strings.
-betterstrsplit = function(string, split)
+betterstrsplit = function(string, split, ...)
 {
-  x = strsplit(string, split)
+  x = strsplit(string, split, ...)
   
   for (i in seq(length(x)))
   {
@@ -210,7 +233,11 @@ prepare_battleinfo = function(battleinfo, required=c("all"), rawset=NULL, warn=T
 
 
 # Reads data from ip spend file and creates a dataset from it.
-# Note: output dataset is missing a per_player field, create it manually with prepare_per_player()
+# Note: output dataset is missing a per_player field, create it manually with prepare_per_player
+# Note #2: this function does not generate some of rows in the "raw" dataset, you need to create them
+#          with add_convenience_columns
+# Note #3: if data comes in an old format, some columns might be missing or renamed.
+#          You can reformat the data after reading, with ensure_modern_format
 
 # Dataset format is list of:
 #   faction - name of team which this dataset belongs to
@@ -228,7 +255,7 @@ prepare_battleinfo = function(battleinfo, required=c("all"), rawset=NULL, warn=T
 #     ipUsed - raw (before bonuses) IP from playing Influence games (numeric)
 #     bipUsed - raw (before bonuses) BIP from Discord (numeric)
 #     ipApplied - total IP applied to tile (after bonuses) (numeric)
-#     directPlay - whether the listed value of ipUsed comes from DirectPlay feature (logical)
+#     mode - method in which IP was applied. Valid values are: "MANUAL", "DIRECT_PLAY", "PASSIVE_PLAY" (character)
 #     sumUsed - total raw (before bonuses) IP used (sum of ipUsed and bipUsed) (numeric)
 #     color - RGB (in hex) color of team the player belongs to (character)
 #
@@ -237,15 +264,17 @@ prepare_battleinfo = function(battleinfo, required=c("all"), rawset=NULL, warn=T
 #     user - user id (unique) of a player (character)
 #     ipUsed - raw (before bonuses) IP from playing Influence games (excluding DirectPlay feature) (numeric)
 #     bipUsed - raw (before bonuses) BIP from Discord (numeric)
-#     DPUsed - raw (before bonuses) IP from DirectPlay feature (numeric)
+#     DPUsed - raw (before bonuses) IP from Direct Play feature (numeric)
+#     PPUsed - raw (before bonuses) IP from Passive Play feature (numeric)
 #     sumUsed - total raw (before bonuses) IP used (sum of ipUsed, DPUsed and bipUsed) (numeric)
 #     ipApplied - total IP applied to tile (after bonuses) (numeric)
 #     faction - name of team player belongs to (character)
 #     color - RGB (in hex) color of team the player belongs to (character)
+#     bot - Whether or not this user is an automatic bot (i.e. faction's automatic attack mechanism) (logical)
      
 
 # Arguments:
-#   filename - path to the file to be read
+#   filename - path to the file with data to be read.
 #
 #   returns: a list
 
@@ -264,28 +293,88 @@ prepare_someset = function(filename)
   
   df = data.frame(data)
   df$battle = as.numeric(df$battle)
-  df$timestamp = as.numeric(df$timestamp)
+  if (! is.null(df$timestamp)) df$timestamp = as.numeric(df$timestamp)
   df$ipUsed = as.numeric(df$ipUsed)
   df$bipUsed = as.numeric(df$bipUsed)
-  df$sumUsed = df$ipUsed + df$bipUsed
   df$ipApplied = as.numeric(df$ipApplied)
-  df$directPlay = df$directPlay == "true"
+  if (! is.null(df$directPlay)) df$directPlay = df$directPlay == "true"
   
-  if ("myTeam" %in% colnames(df))
-  {
-    colnames(df)[colnames(df) == "myTeam"] = "faction"
-  } else
-  {
-    colnames(df)[colnames(df) == "team"] = "faction"
-  }
-  df$faction = toupper(df$faction)
-  
-  df$color = unlist(faction_colors[toupper(df$faction)], use.names=FALSE)
   rownames(df) = seq(1, length(df$name))
   
   newset$raw = df
   return(newset)
 }
+
+
+# The format of the input data has been changing in the past.
+# To ensure backwards-compatibility, this tool converts old data formats
+# to the modern one supported by other functions.
+#   dataset - An unmodified dataset, as returned by prepare_someset (list). Note, that only the "raw" dataset
+#             will be reformatted - if you already created some other data (e.g. per_player dataset) based on
+#             it, it will not be updated and will need to be re-created.
+#
+#   returns: a list (reformatted dataset)
+ensure_modern_format = function(dataset)
+{
+  raw = dataset$raw
+  
+  if ("myTeam" %in% colnames(raw)) # Old format with "myTeam" instead of "team"
+  {
+    colnames(raw)[colnames(raw) == "myTeam"] = "team"
+  }
+  
+  if (! is.null(raw$directPlay)) # Old format with directPlay: true/false
+  {
+    raw$mode = ifelse(raw$directPlay, "DIRECT_PLAY", "MANUAL")
+    raw = raw[- which(colnames(raw) == "directPlay")]
+  } else if (is.null(raw$mode)) # Old format where only manual play mode existed
+  {
+    raw$mode = "MANUAL"
+  }
+  
+  if (is.null(raw$timestamp)) # Old format without timestamps - note that some plots won't work without these
+  {
+    raw$timestamp = NULL
+  }
+  
+  dataset$raw = raw
+  return(dataset)
+}
+
+
+# Adds some more columns to the "raw" dataset, which technically do not contain data that
+# could not be sourced otherwise, but expose it in a more convenient way.
+# These columns are often needed by other functions, so this step of data preparation should not be skipped.
+#   dataset - An unmodified dataset, as returned by prepare_someset or ensure_modern_format. (list)
+#
+#   returns: a list (expanded dataset)
+add_convenience_columns = function(dataset)
+{
+  raw = dataset$raw
+  
+  colnames(raw)[colnames(raw) == "team"] = "faction"
+  raw$faction = toupper(raw$faction)
+  
+  raw$color = unlist(faction_colors[raw$faction], use.names=FALSE)
+  
+  raw$sumUsed = raw$ipUsed + raw$bipUsed
+  
+  dataset$raw = raw
+  return(dataset)
+}
+
+
+# Since prepare_someset, ensure_modern_format and add_convenience_columns should usually be ran in sequence,
+# the following function does all that automatically, simplifying data preparation process.
+#
+#   filename - path to the file with data to be read.
+#
+#   returns: a list (dataset with fully prepared "raw" data. per_player is not yet included)
+read_and_reformat_dataset = function(filename)
+{
+  return( add_convenience_columns( ensure_modern_format( prepare_someset(filename) ) ) )
+}
+
 
 # Creates a "per_player" data frame (listing summarical scores of each player in a dataset)
 # See docstring of function "prepare_someset" for the format of such data frame
@@ -294,28 +383,43 @@ prepare_someset = function(filename)
 #   returns: a data.frame
 prepare_per_player = function(rawall)
 {
-  per_player = data.frame(name="", user="", ipUsed=0, bipUsed=0, DPUsed=0, sumUsed=0, ipApplied=0, faction="", color="")
+  per_player = data.frame(name="", user="", ipUsed=0, bipUsed=0, DPUsed=0, PPUsed=0,
+                          sumUsed=0, ipApplied=0, faction="", color="", bot=FALSE)
   
   for(idx in seq(1, length(rawall$user)))
   {
     row = rawall[idx,]
     if (! row$user %in% per_player$user)
     {
-      tmp = data.frame(a=row$name, b=row$user, c=0, d=row$bipUsed, e=0, f=row$sumUsed, g=row$ipApplied, h=row$faction, i=row$color)
-      tmp$c = ifelse(row$directPlay, 0, row$ipUsed)
-      tmp$e = ifelse(row$directPlay, row$ipUsed, 0)
+      tmp = data.frame(name=row$name, user=row$user, ipUsed=0, bipUsed=row$bipUsed, DPUsed=0, PPUsed=0,
+                       sumUsed=row$sumUsed, ipApplied=row$ipApplied, faction=row$faction, color=row$color, bot=F)
+
+      tmp$ipUsed = ifelse(row$mode=="MANUAL" | row$mode=="AUTO", row$ipUsed, 0)
+      tmp$DPUsed = ifelse(row$mode=="DIRECT_PLAY", row$ipUsed, 0)
+      tmp$PPUsed = ifelse(row$mode=="PASSIVE_PLAY", row$ipUsed, 0)
       
-      names(tmp) = names(per_player)
+      # A bot should ALWAYS have its actions marked as "AUTO", so this only needs to be checked once
+      if (row$mode=="AUTO") {tmp$bot = TRUE}
+      
       per_player = rbind(per_player, tmp)
     } else
     {
       idx = which(per_player$user == row$user)
       if (per_player[idx, "name"] != row$name) per_player[idx, "name"] = paste(row$name, "*")
       
-      if (row$directPlay)
+      if (row$mode == "DIRECT_PLAY")
       {
         per_player[idx, "DPUsed"] = per_player[idx, "DPUsed"] + row$ipUsed
-      } else per_player[idx, "ipUsed"] = per_player[idx, "ipUsed"] + row$ipUsed
+      } else if (row$mode == "MANUAL" | row$mode == "AUTO")
+      {
+        per_player[idx, "ipUsed"] = per_player[idx, "ipUsed"] + row$ipUsed
+      } else if (row$mode == "PASSIVE_PLAY")
+      {
+        per_player[idx, "PPUsed"] = per_player[idx, "PPUsed"] + row$ipUsed
+      } else
+      {
+        warning(paste0("Warning: prepare_per_player: Ignoring row with timestamp ", row$timestamp, " due to invalid play mode!"))
+      }
       
       per_player[idx, "bipUsed"] = per_player[idx, "bipUsed"] + row$bipUsed
       per_player[idx, "sumUsed"] = per_player[idx, "sumUsed"] + row$sumUsed
@@ -343,7 +447,9 @@ prepare_factionsets = function(allset)
     if (! row$faction %in% names(factionsets))
     {
       factionsets[[row$faction]] = list(raw=row, faction=row$faction, color=row$color,
-                                        per_player = data.frame(name="", user="", ipUsed=0, bipUsed=0, DPUsed=0, sumUsed=0, ipApplied=0, faction="", color=""))
+                                        per_player = data.frame(name="", user="", ipUsed=0, bipUsed=0, DPUsed=0,
+                                                                PPUsed=0, sumUsed=0, ipApplied=0, faction="",
+                                                                color="", bot=F))
     } else
     {
       factionsets[[row$faction]]$raw = rbind(factionsets[[row$faction]]$raw, row)
