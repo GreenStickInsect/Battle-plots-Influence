@@ -1041,7 +1041,7 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
   for (i in seq(1, length(timelines)))
   {
     model = loess(value ~ hour,
-                  data.frame(value = unlist(timelines[[i]]$per_hour), hour = names(per_hour)), span=0.09)
+                  data.frame(value = unlist(timelines[[i]]$per_hour), hour = names(per_hour)), span=0.09, degree=1)
     newdata = data.frame(hour=seq(1, info$battle_length, by=0.25))
     p = predict(model, newdata)
     
