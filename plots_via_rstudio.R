@@ -9,42 +9,25 @@
 # When this happens, run command 'dev.off()' a few times, until it says "null device".
 # This should close all output devices and let a default one open on next plot.
 
-
-# Set work dir to current script location.
-# Careful - this might not work if ran otherwise than from within RStudio
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-
-### Source required functions ###
-
-# data processing functions
-source("data_functions.R")
-
-# plotting functions
-source("plotting_functions.R")
-
-# If ggplot2 is available, source advanced plotting functions
-ggplotgraphics = FALSE
-if (require("ggplot2"))
-{
-  ggplotgraphics = TRUE
-  library(ggplot2)
-  
-  source("plotting_ggplot.R")
-} else
-{
-  cat("WARNING: Library ggplot2 is not installed.
-      Some plots cannot be drawn without it and will be skipped or replaced with simpler version.\n")
-}
-
-
+##################################
 ### Manually changed variables ###
+##################################
+# This is the playground - the following variables are to be modified
+# as fits, according to data and its location
+# Just be warned that if some files with same names as chosen already exist in
+# the selected directory, these WILL be overwritten.
+#
+# NOTE: The following config options only let you draw the basic set of plots.
+#       In order to customize, you'd need to scroll down to "Drawing the plots" section
+#       and modify / add plot function calls. This is a bit more advanced and might require
+#       digging through documentation in proper code files
 
-# Directory in which data files are and where plots will be generated
-directory = "./battle_xxx"
 
-# Names of files with data
-filenames = c("ip_spend_battle_125.csv")
-battleinfofile = "battleinfo.txt"
+# File paths !!!
+################
+directory = "./battle_xxx" # Directory in which data files are and where plots will be generated
+filenames = c("ip_spend_battle_xxx.csv") # Main file with battle data
+battleinfofile = "battleinfo.txt" # Supplementary general info file
 
 # Technically, if you know what you're doing, you can set the directory to whatever
 # you like and paths to input files located completely elsewhere,
@@ -52,26 +35,102 @@ battleinfofile = "battleinfo.txt"
 
 
 # Whether to export to files
+############################
 #   FALSE - draw the plots within R
 #   TRUE - instead, draw the plots as .png files
 #
-# Note: output file names are defined in the drawing code below, separately for each plot.
+# Note: output file names for each plot are defined below.
 # You can change them if you wish.
-export = F
+export = FALSE
+
+# Set to FALSE to disable ggplot-drawn plots. Requires package 'ggplot2'.
+ENABLE_GGPLOT_PLOTS = TRUE
+
+# Set to TRUE to also draw animated plots. Requires library 'gganimate'.
+# Implies ENABLE_GGPLOT_PLOTS, since animated plots are drawn using ggplot2.
+# Generation of animated plots may be slow and heavy on the device.
+ENABLE_ANIMATED_PLOTS = FALSE
 
 
-# RGB (in hex) colors of each team. This also serves as a declaration of known teams and their names.
+# Teams/factions config
+#######################
+# Specifies RGB (in hex) colors of each team.
+# This also serves as a declaration of known teams and their names.
 # Be careful if you're editing that, wrong definition can easily make plots malfunction
 faction_colors = data.frame(CI="#1aa44f", MT="#fc8c36", DC="#3f5fde",
                             PS="#beff64", BB="#ff496c", FG="#0099ff",
-                            CO="#9c6aff", CR="#b20000", NO_TEAM="#303030",
-                            XX="#303030")
+                            CO="#9c6aff", RG = "#00bfa5", CR="#b20000",
+                            YY="#bcab8f", NO_TEAM="#303030", XX="#303030")
 
 
+# File names
+############
+file_suffix = ".png" # Appended at the end of file name, except for animated plots which use '.gif'
+
+prefix_player_plots = "Plot_players_" # Name for player plots is constructed like: prefix + faction name + suffix
+name_team_plot = "Teamplot" # Total scores of each faction
+name_contribution_plot = "Contribplot" # Player's support to factions
+name_opposition_plot = "Oppositionplot" # Player's opposition to factions
+name_bonuses_plot = "Bonusplot" # Average IP bonus per player
+name_scaleplot = "Scaleplot" # Top scorers vs everyone else
+name_sourceplot_classic = "Sourceplot" # Usage of playing methods
+name_sourceplot_pie = "Sourceplot_pie" # Same as above but as piechart
+name_hit_density_plot = "HitDensity" # Density of hits across a cycle
+name_hit_density_animated_plot = "HitDensity_animation" # Density of hits on each cycle
+name_timeline = "Timeline" # Timeline of faction activity
+name_cr_plot = "CRPlot" # CR vs other teams
+name_nexscale = "PlayersOnANexScale" # Copies of Nex vs other players. Only drawn if Nex participated
+
+
+#########################
+### Prepare Resources ###
+#########################
+# Only touch the following if you know what you're doing
+
+# Set work dir to current script location.
+# Careful - this might not work if ran otherwise than from within RStudio
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+## Source required functions ##
+
+# data processing functions
+source("data_functions.R")
+
+# plotting functions
+source("plotting_functions.R")
+
+if (ENABLE_ANIMATED_PLOTS) ENABLE_GGPLOT_PLOTS = TRUE
+
+# If ggplot2 is available, source advanced plotting functions
+ggplotgraphics = FALSE
+if (ENABLE_GGPLOT_PLOTS)
+{
+  if (require("ggplot2", quietly=T))
+  {
+    ggplotgraphics = TRUE
+    source("plotting_ggplot.R")
+
+  } else
+  {
+    cat("WARNING: ENABLE_GGPLOT_PLOTS and/or ENABLE_ANIMATED_PLOTS are set to TRUE, yet library 'ggplot2' is not installed.
+        These plots cannot be drawn without it and will be skipped or replaced with simpler versions.\n")
+    ENABLE_ANIMATED_PLOTS = FALSE
+  }
+}
+
+animatedgraphics = FALSE
+if (ENABLE_ANIMATED_PLOTS)
+{
+  if (require("gganimate", quietly=T)) animatedgraphics = TRUE
+  else cat("WARNING: ENABLE_ANIMATED_PLOTS is set to TRUE, yet library gganimate is not installed.
+           Animated plots cannot be drawn without it and will be skipped.")
+}
+
+
+#########################
 ### Generate datasets ###
+#########################
 # You probably don't want to touch this section, unless you REALLY know what you're doing
-# Though, if you have some weird, unusual data, you might need to do that to make it work.
-# Well, good luck.
 
 # We'll be working in output directory from now on
 setwd(directory)
@@ -148,24 +207,26 @@ sets$ALL$per_player = prepare_per_player(sets$ALL$raw) # see data_functions.R fo
 sets = append(sets, prepare_factionsets(sets$ALL))
 
 
+#########################
 ### Drawing the plots ###
-
+#########################
 # Draws the standard set of plots
 # This can be edited to customize, though you might want to first have a look at
 # inline plot documentation in plotting_functions.R and plotting_ggplot.R
 
 
-## Per player plots
+## Player plots
 
 # This includes "All Players" plot, as well as "Per faction" plots
 # Basically just plots total scores of every player in a dataset
 for (s in sets)
 {
+  if (s$faction == "CR") next # Makes no sense for CR - as a singular force, it is better seen on Team plot
   text.cex = 1
   if (s$faction == "All") text.cex = 0.8
   
   tofile = FALSE
-  if (export) tofile = paste("Plot_players_", s$faction, ".png", sep="")
+  if (export) tofile = paste0(prefix_player_plots, s$faction, file_suffix)
   player_plot(s, battleinfo, text.cex=text.cex, cex.names=0.8, tofile=tofile)
 }
 rm(s, text.cex) # cleanup
@@ -177,18 +238,19 @@ rm(s, text.cex) # cleanup
 #
 # Internally utilizes the "vsplot" function.
 if (!export) {teamplot(sets, battleinfo)
-} else teamplot(sets, battleinfo, tofile="Teamplot.png")
+} else teamplot(sets, battleinfo, tofile=paste0(name_team_plot, file_suffix))
 
 
 ## Contribution plot
 
 # Which teams did every player help
 if (! export) {contribution_plot(sets$ALL, battleinfo)
-} else contribution_plot(sets$ALL, battleinfo, tofile="Contribplot.png")
+} else contribution_plot(sets$ALL, battleinfo, tofile=paste0(name_contribution_plot, file_suffix))
 
 # Which teams did every player oppose (fight against)
 if (! export) {contribution_plot(sets$ALL, battleinfo, inverted=TRUE)
-} else contribution_plot(sets$ALL, battleinfo, tofile="Oppositionplot.png", inverted=TRUE)
+} else contribution_plot(sets$ALL, battleinfo,
+                         tofile=paste0(name_opposition_plot, file_suffix), inverted=TRUE)
 
 
 ## Bonuses plot
@@ -198,7 +260,7 @@ if (! export) {contribution_plot(sets$ALL, battleinfo, inverted=TRUE)
 # "Used" columns (in fact, datasets already have a "sumUsed" column defined)
 # It WILL stop being accurate if formula for ipApplied ever changes to include something besides the bonus
 if (! export) {bonusplot(sets$ALL, battleinfo)
-} else bonusplot(sets$ALL, battleinfo, tofile="Bonusplot.png")
+} else bonusplot(sets$ALL, battleinfo, tofile=paste0(name_bonuses_plot, file_suffix))
 
 
 ## Scaleplot
@@ -208,7 +270,7 @@ if (! export) {bonusplot(sets$ALL, battleinfo)
 #
 # Internally utilizes the "vsplot" function.
 if (! export) {scaleplot(sets$ALL, battleinfo)
-} else scaleplot(sets$ALL, battleinfo, tofile="Scaleplot.png")
+} else scaleplot(sets$ALL, battleinfo, tofile=paste0(name_scaleplot, file_suffix))
 
 
 ## Sourceplot
@@ -220,12 +282,12 @@ if (! export) {scaleplot(sets$ALL, battleinfo)
 if (ggplotgraphics)
 { # Pie chart (requires ggplot2)
   if (! export) {sourceplot_piechart(sets$ALL, battleinfo)
-  } else sourceplot_piechart(sets$ALL, battleinfo, tofile="Sourceplot_pie.png")
+  } else sourceplot_piechart(sets$ALL, battleinfo, tofile=paste0(name_sourceplot_pie, file_suffix))
   
 } else
 { # Simple version (bar plot)
   if (! export) {sourceplot(sets$ALL, battleinfo)
-  } else sourceplot(sets$ALL, battleinfo, tofile="Sourceplot.png")
+  } else sourceplot(sets$ALL, battleinfo, tofile=paste0(name_sourceplot_classic, file_suffix))
 }
 
 
@@ -233,7 +295,15 @@ if (ggplotgraphics)
 if (ggplotgraphics) # Requires ggplot2
 {
   if (! export) {hitdensity(sets$ALL, battleinfo)
-  } else hitdensity(sets$ALL, battleinfo, tofile="HitDensity.png")
+  } else hitdensity(sets$ALL, battleinfo, tofile=paste0(name_hit_density_plot, file_suffix))
+}
+
+
+## Hit density on each cycle (animated)
+if (animatedgraphics)
+{
+  if (! export) {hitdensity_anim(sets$ALL, battleinfo)
+  } else hitdensity_anim(sets$ALL, battleinfo, tofile=paste0(name_hit_density_animated_plot, ".gif"))
 }
 
 
@@ -241,7 +311,7 @@ if (ggplotgraphics) # Requires ggplot2
 
 # Visualizes performance of each team over time
 if (! export) {timeline(sets, battleinfo)
-} else timeline(sets, battleinfo, tofile="Timeline.png")
+} else timeline(sets, battleinfo, tofile=paste0(name_timeline, file_suffix))
 
 ## CR plot (if this is CR battle)
 
@@ -249,8 +319,24 @@ if (! export) {timeline(sets, battleinfo)
 if (battleinfo$attacker == "cr" | battleinfo$defender == "cr")
 {
   if (! export) {nexplot(sets$ALL, "cr", c("The Evil Force", "Stubborn Prey"))
-  } else nexplot(sets$ALL, "cr", c("The Evil Force", "Stubborn Prey"), tofile="CRPlot.png")
+  } else nexplot(sets$ALL, "cr", c("The Evil Force", "Stubborn Prey"), tofile=paste0(name_cr_plot, file_suffix))
 }
+
+## Nexscale
+
+# Like a scale, but we're using Nexes instead of weights???
+if ("Nex" %in% sets$ALL$per_player$name)
+{
+  if (! export) {nexscale(sets$ALL, battleinfo=battleinfo)
+  } else nexscale(sets$ALL, battleinfo=battleinfo, tofile=paste0(name_nexscale, file_suffix))
+}
+
+# Nexplot
+# if ("Nex" %in% sets$ALL$per_player$name)
+# {
+#   if (! export) {nexplot(sets$ALL)
+#   } else nexplot(sets$ALL, tofile="Nexplot.png")
+# }
 
 
 ## Custom vsplot

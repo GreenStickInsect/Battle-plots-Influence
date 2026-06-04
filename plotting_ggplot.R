@@ -25,9 +25,10 @@ theme_piechart = theme_standard +
 #   dat - A dataset.
 #   battleinfo - An (optional) list of additional info about the battle, usually published along with IP spend data.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
+#   mode - special admin override string, shhh...
 #
 #   returns: a ggplot object which was used to draw the chart
-sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
+sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE, mode=FALSE)
 {
   # The following is basically dark magic practiced through trial and error,
   # because ggplot2 is TERRIBLY documented and does VERY WEIRD things to data, for no apparent reason.
@@ -123,6 +124,14 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
     
   csum = cumsum(sumvalues)
   pos = csum[length(csum)] - csum + sumvalues/2
+  
+  today = as.POSIXct(Sys.Date())
+  its_pa = F
+  if (mode == "pa" |
+      (format(today, format="%m") == "04" & format(today, format="%d") == "01" & mode != "!pa")) its_pa = T
+  
+  inner_radius = 0
+  if (its_pa) inner_radius = 0.5
 
   # ggplot complains about "not officially supported vectorized input to `element_text()`"
   # Well, maybe it SHOULD be officially supported, since that's the only way to manually rotate axis tick labels
@@ -136,7 +145,7 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE)
                 scale_fill_manual("IP source",
                     values = cols,
                     limits = groups) +
-                coord_radial("y", expand=F) +
+                coord_radial("y", expand=F, inner.radius = inner_radius) +
                 theme_piechart +
                 theme(axis.text.x = element_text(angle=circle_rotation2)) +
                 geom_text(aes(group=group, label=labels, fontface="bold"),
@@ -215,7 +224,7 @@ hitdensity = function(dat, battleinfo=NULL, tofile=FALSE)
                       limits=c("Any", "Manual", "Direct Play")) +
     scale_color_manual("Hit method", values=c("Any"="gray20","Manual"="orange2", "Direct Play"="blue2"),
                        limits=c("Any", "Manual", "Direct Play")) +
-    scale_x_continuous(breaks=seq(2,60,2), labels = xlabs) +
+    scale_x_continuous(breaks=seq(2,60,2), labels = xlabs, expand=0) +
     labs(title="Density of hits across a cycle", subtitle=paste0("battle #", info$number, " in ", info$place)) +
     xlab("Minute of a cycle") +
     ylab("Density") +
@@ -226,6 +235,73 @@ hitdensity = function(dat, battleinfo=NULL, tofile=FALSE)
   if (tofile != FALSE)
   {
     dev.off()
+  }
+  return(invisible(plt))
+}
+
+
+hitdensity_anim = function(dat, battleinfo=NULL, tofile=FALSE)
+{
+  info = prepare_battleinfo(battleinfo, required=c("number", "place", "start"), dat$raw)
+  
+  minutes = c()
+  hours = c()
+  types = c()
+  for (i in seq(1, length(dat$raw$user)))
+  {
+    row = dat$raw[i,]
+    if (row$mode == "PASSIVE_PLAY") next
+    else if (row$mode == "AUTO") next
+    
+    time = as.POSIXct(row$timestamp, tz="UTC", origin="1970-01-01")
+    minute = as.integer(format(time, format="%M")) + 1
+    hour = floor(row$timestamp/3600.0 - floor(info$start/3600.0)+1)
+    
+    type = switch(row$mode,
+                  "MANUAL" = "Manual",
+                  "DIRECT_PLAY" = "Direct Play")
+    types = c(types, type)
+    types = c(types, "Any")
+    minutes = c(minutes, minute, minute)
+    hours = c(hours, hour, hour)
+  }
+  
+  df = data.frame(
+    minute = minutes,
+    hour = factor(hours, levels=seq(max(hours))),
+    type=factor(types, c("Any", "Manual", "Direct Play"))
+  )
+  
+  xlabs = as.character(seq(2,60,2))
+  xlabs = ifelse(nchar(xlabs) == 1, paste0("0",xlabs), paste0("",xlabs))
+  
+  group_sizes = ave(seq_len(nrow(df)), df$hour, df$type, FUN=length)
+  df_clean = df[group_sizes >= 2,]
+  singular = df[group_sizes == 1,]
+  
+  plt = ggplot() +
+    geom_density(data=df_clean, aes(x=minute, color=type, fill=type, group=type), alpha=0.35) +
+    geom_vline(data=singular, aes(xintercept=minute, color=type, group=type)) +
+    scale_fill_manual("Hit method", values=c("Any"="gray40","Manual"="orange", "Direct Play"="blue"),
+                      limits=c("Any", "Manual", "Direct Play")) +
+    scale_color_manual("Hit method", values=c("Any"="gray20","Manual"="orange2", "Direct Play"="blue2"),
+                       limits=c("Any", "Manual", "Direct Play")) +
+    scale_x_continuous(breaks=seq(2,60,2), labels = xlabs, expand=0) +
+    gganimate::transition_states(hour, transition_length=2, state_length=1) +
+    labs(title="Density of hits on cycle {closest_state}", subtitle=paste0("battle #", info$number, " in ", info$place)) +
+    xlab("Minute of a cycle") +
+    ylab("Density") +
+    theme_standard
+  
+  a = gganimate::animate(plt,
+                         nframes=300, fps=8, units="in", width=8, height=4, res=200)
+  
+  if (tofile != FALSE)
+  {
+    gganimate::anim_save(tofile, animation=a)
+  } else
+  {
+    print(a)
   }
   return(invisible(plt))
 }

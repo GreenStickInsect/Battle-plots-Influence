@@ -132,10 +132,12 @@ iptype_legend = function(x, y, xjust=0, yjust=1, ...)
 #   horiz - whether the barplot should be drawn horizontally. Defaults to FALSE.
 #   text.cex - numeric character expansion vector for text()
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
+#   mode - special admin override string, shhh...
 #   ... - additional arguments to supply to barplot()
 #
 #   returns: vector of x positions of bars
-player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, tofile=FALSE, ...)
+player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1,
+                       tofile=FALSE, mode=FALSE, ...)
 {
   info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
   if (is.null(battleinfo$place))
@@ -179,7 +181,9 @@ player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, 
     }
   }
   
-  numlabs = format(sumvals, big.mark=" ", scientific=FALSE)
+  numlabs = format(sumvals, trim=T, big.mark=" ", scientific=FALSE)
+  numlab_srt = 45
+  numlab_adj = c(0, 0)
   
   # Manually manipulate CR score to make its bar appear shorter (else it'd "break" the scale)
   cr_idx = which(dat$per_player$user == "324d8a1d3f81e730d5099a48cee0c5b6")
@@ -207,6 +211,18 @@ player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, 
   
   barcolors = rep(dat$per_player$color, each=4)
   
+  today = as.POSIXct(Sys.Date())
+  its_pa = F
+  if (mode == "pa" |
+      (format(today, format="%m") == "04" & format(today, format="%d") == "01" & mode != "!pa")) its_pa = T
+  if (its_pa)
+  {
+    valmatrix = valmatrix[,rev(1:ncol(valmatrix)), drop=F] # drop not being false by default is an unbelievable irresponsibility
+    sumvals = rev(sumvals)
+    numlab_srt = -45
+    numlab_adj = c(1, 0)
+  }
+  
   if (tofile != FALSE) png(tofile, 1280, 720)
   positions = barplot(valmatrix, names.arg=dat$per_player$name, horiz=horiz,
                       col=barcolors, ylim=ylim, xlim=xlim, space=0.1,
@@ -225,29 +241,39 @@ player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, 
   dotspacey = max(sumvals)/100
   dotspacex = 4*(par("cxy")[1]/par("cra")[1])
   
+  dot_end_y = unlist(vals[1,])
+  if (its_pa)
+  {
+    dot_end_y = rev(dot_end_y)
+  }
   dot_box(positions-0.5*bardist+dotspacex/2, rep(0, ncol(vals)),
-          positions+0.5*bardist-dotspacex/2, unlist(vals[1,]),
+          positions+0.5*bardist-dotspacex/2, dot_end_y,
           by=dotspacex, by2=dotspacey)
   
   text(positions, rep(vmax*-0.05, length(positions)), labels=dat$per_player$name,
        cex=text.cex, srt=45, adj = c(1,0.5))
   text(positions, sumvals + vmax*0.03, labels=numlabs,
-       cex=text.cex, srt=45, adj=c(0, 0))
+       cex=text.cex, srt=numlab_srt, adj=numlab_adj)
   
   #widths = sapply(format(sumvals, big.mark=" ", scientific=FALSE), strwidth)
   #print(widths)
   #text(positions+widths, sumvals + vmax*0.03, labels="test", srt=45, adj=c(0,0))
   
-  if (! horiz)
+  x=par("usr")[2]
+  y=vmax + vmax*0.3
+  adjx=1
+  if (its_pa)
   {
-    x=par("usr")[2]
-    y=vmax + vmax*0.3
-  } else
-  {
-    x=vmax + vmax*0.3
-    y=par("usr")[2]
+    x = par("usr")[1]
+    adjx=0
   }
-  iptype_legend(x, y, 1, 1)
+  if (horiz)
+  {
+    x_tmp=y
+    y=x
+    x=x_tmp
+  }
+  iptype_legend(x, y, adjx, 1)
   
   if (tofile != FALSE)
   {
@@ -263,7 +289,7 @@ player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1, 
 #   ... - additional arguments to supply to barplot()
 #
 #   returns: vector of x positions of bars
-contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALSE, ...)
+contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALSE, raw=T, ...)
 {
   info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
   
@@ -292,7 +318,9 @@ contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALS
     }
     
     user_idx = match(event$user, colnames(contrib_matrix))
-    contrib_matrix[supported_idx, user_idx] = contrib_matrix[supported_idx, user_idx] + event$sumUsed
+    if (raw) score = event$sumUsed
+    else score = event$ipApplied
+    contrib_matrix[supported_idx, user_idx] = contrib_matrix[supported_idx, user_idx] + score
   }
   contrib_matrix = contrib_matrix[,-1]
   
@@ -391,13 +419,15 @@ contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALS
   
   if (tofile != FALSE) png(tofile, 1280, 720)
   p = par(mar=par("mar")+0.5)
+  if (raw) ylab = raw_ip_label
+  else ylab = as.expression(bquote(paste("IP spent ", scriptstyle("(after bonuses)"))))
   
   positions = barplot(ordered_matrix, col=barcolors,
                       ylim=ylim, xlim=xlim, width=width,
                       main=bquote(atop(bold(.(maintitle)),
                                        scriptstyle(paste("battle #", .(info$number), " in ", .(info$place))) )),
                       sub = bquote(scriptstyle(.(subtitle))), axes=FALSE, las=1, srt=35, axisnames=FALSE,
-                      ylab=raw_ip_label, ...)
+                      ylab=ylab, ...)
   
   bardist = positions[2] - positions[1]
   tickdist = round(vmax*1.1/15, digits=-3)
@@ -448,7 +478,15 @@ contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALS
     dev.off()
   }
   
-  return(invisible(positions))
+  usernames = c()
+  for (n in colnames(ordered_matrix))
+  {
+    user = dat$per_player[which(dat$per_player$user==n),]
+    usernames = c(usernames, user$name)
+  }
+  colnames(ordered_matrix) = usernames
+  
+  return(invisible(ordered_matrix))
 }
 contribution_plot = ensure_isolation(contribution_plot__, "contribution_plot") # Just a tiny safety-ensuring wrapper, see data_functions.R
 
@@ -528,6 +566,8 @@ bonusplot = ensure_isolation(bonusplot__, "bonusplot") # Just a tiny safety-ensu
 #              Each vector specifies colors of text of every team member's name. Color can be RGB or color name.
 #              If not specified or NA, a vector will be generated by choosing the best contrasting option (black or white) for each player, based on their real team's (background) color.
 #
+#   parsestrings - (logical) if TRUE, strings supplied to function (team names etc.) will be treated
+#                   like language objects. Defaults to FALSE.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to barplot()
 #
@@ -555,10 +595,13 @@ bonusplot = ensure_isolation(bonusplot__, "bonusplot") # Just a tiny safety-ensu
 #
 #   vsplot(teams = teams, teamnames = c("Best Player", "Worst Player"), textcols = NA,
 #          tofile = "Best-worstplot.png", density=25, main=bquote(atop("Best and worst players", "of PS and BB")))
-vsplot__ = function(teams, teamnames=list(NA_character_, NA_character_), textcols=list(NA_character_, NA_character_), tofile=FALSE, ...)
+vsplot__ = function(teams, teamnames=list(NA_character_, NA_character_),
+                    textcols=list(NA_character_, NA_character_), parsestrings=FALSE,
+                    tofile=FALSE, ...)
 {
   teams = as.list(teams)
   teamnames = as.list(teamnames)
+  stopifnot(all(sapply(teamnames, is.character)))
   if (length(teams) < 2)
   {
     stop("Function vsplot: Too few teams supplied - must be no less than 2.")
@@ -566,10 +609,13 @@ vsplot__ = function(teams, teamnames=list(NA_character_, NA_character_), textcol
   for (i in seq(length(teams)))
   {
     teams[[i]] = datasort(teams[[i]])
-    if (length(teamnames) < i ||
+    if (length(teamnames) < i |
         is.na(teamnames[[i]]))
     {
-      teamnames[[i]] = paste("Team", i)
+      if (parsestrings)
+      {
+        teamnames[[i]] = paste0("\"Team ", i, '\"')
+      } else teamnames[[i]] = paste("Team", i)
     }
     if (length(textcols) < i)
     {
@@ -661,7 +707,13 @@ vsplot__ = function(teams, teamnames=list(NA_character_, NA_character_), textcol
                       horiz=FALSE)
   
   ellipsis = list(...)
-  ellipsis = lapply(ellipsis, as.expression)
+  ellipsis = lapply(ellipsis, function(x)
+                              {
+                                if (is.language(x))
+                                {
+                                  return(as.expression(x))
+                                } else return(x)
+                              })
   if ("height" %in% names(ellipsis)) warning("Warning: vsplot: Argument \"height\" for barplot is being overwritten by specified ellipsis (... argument). This is not an intended way to use vsplot.")
   if ("log" %in% names(ellipsis) &&
       ellipsis[["log"]] != "") stop("Error: vsplot: vsplot does not support logarithmic axes!")
@@ -673,6 +725,16 @@ vsplot__ = function(teams, teamnames=list(NA_character_, NA_character_), textcol
       barplot_args[[arg]] = ellipsis[[arg]]
       ellipsis = ellipsis[-which(names(ellipsis) == arg)]
     }
+  }
+  if (parsestrings)
+  {
+    names_arg_new = list()
+    for (i in seq_along(barplot_args$names.arg))
+    {
+      names_arg_new[[i]] = str2lang(barplot_args$names.arg[[i]])
+    }
+    barplot_args$names.arg = sapply(names_arg_new, as.expression)
+    barplot_args$main = str2lang(barplot_args$main)
   }
   
   
@@ -859,18 +921,20 @@ scaleplot = function(dat, battleinfo=NULL, tofile=FALSE, ...)
 # A variant of vsplot which compares balanced (in terms of total IP spent) teams of Nex copies and all other players.
 # First team (bar) will contain a number of Nex copies which in total scored at least as much as all others (team 2).
 #   dat - A dataset.
+#   playername - Name of user to use as weights. Defaults to "Nex". (character)
+#   battleinfo - An (optional) list of additional info about the battle, usually published along with IP spend data.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to vsplot().
 #
 #   returns: a list with some of parameters used to draw the plot, as returned by vsplot.
-nexscale = function(dat, battleinfo=NULL, tofile=FALSE, ...)
+nexscale = function(dat, playername="Nex", battleinfo=NULL, tofile=FALSE, ...)
 {
   info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
   
   # Remove bots (they're not interesting in this comparison) and sort descending
   cleandat = datasort(dat$per_player[which(dat$per_player$bot == FALSE),])
   
-  nex = which(cleandat$name == "Nex")
+  nex = which(cleandat$name == playername)
   lower = cleandat[-nex,]
   upper = cleandat[nex,]
   
@@ -879,9 +943,9 @@ nexscale = function(dat, battleinfo=NULL, tofile=FALSE, ...)
     upper = rbind(upper, cleandat[nex,])
   }
   
-  data=vsplot(list(top=upper, rest=lower), c(paste("Nexes (", nrow(upper), ")", sep=""),
+  data=vsplot(list(top=upper, rest=lower), c(paste(playername, "s (", nrow(upper), ")", sep=""),
                                              paste("Everyone else (", nrow(lower), ")", sep="")),
-              main=bquote(atop(bold("Weighing players on the NexScale..."),
+              main=bquote(atop(bold(paste("Weighing players on the ", .(playername), "Scale ...")),
                                scriptstyle(paste("battle #", .(info$number), " in ", .(info$place))))),
               sub="(Automatic faction and CR attacks are excluded)",
               ylab=raw_ip_label, tofile=tofile, ...)
@@ -937,7 +1001,7 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
     for (i in seq(1, length(faction$raw$user)))
     {
       row = faction$raw[i,]
-      hour = floor( (row$timestamp - info$start) / 3600.0) + 1
+      hour = floor(row$timestamp/3600.0 - floor(info$start/3600.0)+1)
       per_hour[[hour]] = per_hour[[hour]] + row$sumUsed
     }
     
@@ -958,8 +1022,12 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
   ax_names = c()
   for (i in seq(0, info$battle_length))
   {
-    ax_names = c(ax_names, as.expression(bquote( scriptstyle(.(format(as.POSIXct(info$start+3600*i, tz="UTC", origin="1970-01-01"),
-                                                                      format="%H:%M"))) )))
+    ax_names = c(ax_names,
+                 as.expression(bquote(scriptstyle(paste('(',
+                                                        .(format(as.POSIXct(floor(info$start/3600.0)*3600 + 3600*i,
+                                                                            tz="UTC", origin="1970-01-01"),
+                                                                 format="%H")),
+                                                        ')')) )))
   }
   axis(1, at=c(0, names(per_hour)), lty="solid", labels=seq(0, info$battle_length), line=0)
   axis(1, at=c(0, names(per_hour)), lty="solid", labels=ax_names, line=1, tick=FALSE)
@@ -973,7 +1041,7 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
   for (i in seq(1, length(timelines)))
   {
     model = loess(value ~ hour,
-                  data.frame(value = unlist(timelines[[i]]$per_hour), hour = names(per_hour)), span=0.1)
+                  data.frame(value = unlist(timelines[[i]]$per_hour), hour = names(per_hour)), span=0.09)
     newdata = data.frame(hour=seq(1, info$battle_length, by=0.25))
     p = predict(model, newdata)
     
