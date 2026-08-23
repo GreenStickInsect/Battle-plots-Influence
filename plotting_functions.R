@@ -104,27 +104,127 @@ dot_box = function(x, y, x2, y2, by, by2, col="black", ...)
 #   xjust - x justification of the legend. See documentation of legend() for details.
 #   yjust - y justification of the legend. See documentation of legend() for details.
 #   ... - additional arguments to supply to legend()
-iptype_legend = function(x, y, xjust=0, yjust=1, ...)
+iptype_legend = function(x, y, xjust=0, yjust=1, cex=1.1, x.intersp=0.2, y.intersp=0.7, ...)
 {
   labels = c("Influence IP", "Passive Play", "Direct Play", "Discord BIP")
-  lgp = legend(x, y, col=c("white", "black", "black", "black"), density=c(0, 25, 25, 0),
-               angle=c(45, 90, 45, 45), y.intersp = 1, legend=labels, xjust=xjust, yjust=yjust, ...)
+  ncol=1
   
-  cx = par("cxy")[1]
-  cy = par("cxy")[2]
-  bott = lgp$rect$top - lgp$rect$h
-  txth = max(mapply(strheight, labels))
-  lh = par("lheight")
+  # Dummy legend just to obtain data about its sizes
+  lgp = legend(x, y, x.intersp=x.intersp, y.intersp = y.intersp, density=c(0, 25, 25, 0),
+               legend=labels, xjust=xjust, yjust=yjust, cex=cex, ncol=ncol, plot=FALSE, ...)
+  
+  # Draw legend box
+  rect(lgp$rect$left + lgp$rect$w*0.01, # Left
+       lgp$rect$top - lgp$rect$h + lgp$rect$h*0.08, # Bottom
+       lgp$rect$left + lgp$rect$w - lgp$rect$w*0.05, # Right
+       lgp$rect$top - lgp$rect$h*0.06, # Top
+       col=par("bg"))
+  
+  # Draw legend
+  legend(x, y, col=c("white", "black", "black", "black"), density=c(0, 25, 25, 0),
+         angle=c(45, 90, 45, 45), x.intersp=x.intersp, y.intersp = y.intersp,
+         legend=labels, xjust=xjust, yjust=yjust, cex=cex, ncol=ncol, bty="n", ...)
+  
+  #### The following code is largely copied from graphics::legend
+  colwise <- function(x, n, ncol, n.legpercol, fun, reverse = FALSE) {
+    xmat <- matrix(c(rep(x, length.out = n), rep(0L, n.legpercol * 
+                                                   ncol - n)), ncol = ncol)
+    res <- apply(xmat, 2, fun)
+    res[res == 0L] <- max(res)
+    if (reverse) 
+      -res
+    else res
+  }
+  rowwise <- function(x, n, ncol, n.legpercol, fun, reverse = FALSE) {
+    xmat <- matrix(c(rep(x, length.out = n), rep(0L, n.legpercol * 
+                                                   ncol - n)), ncol = ncol)
+    res <- apply(xmat, 1, fun)
+    if (reverse) 
+      -res
+    else res
+  }
+  
+  n.leg <- length(labels)
+  text.font <- par("font")
+  
+  xy <- xy.coords(x, y, setLab = FALSE)
+  x <- xy$x
+  y <- xy$y
+  nx <- length(x)
+  
+  cex <- rep(cex, length.out = n.leg)
+  x.intersp <- rep(x.intersp, length.out = n.leg)
+  
+  n.legpercol <- ceiling(n.leg/ncol)
+  Cex <- cex * par("cex")
+  
+  xyc <- xyinch(par("cin"), warn.log = FALSE)
+  xc <- Cex * xyc[1]
+  yc <- Cex * xyc[2]
+  y.intersp <- rep(y.intersp, length.out = n.legpercol)
+  yextra <- rowwise(yc, n = n.leg, ncol = ncol, n.legpercol = n.legpercol, 
+                    fun = function(x) max(abs(x))) * (y.intersp - 1)
+  ymax <- sign(yc[1]) * max(abs(yc)) * max(1, mapply(strheight, 
+                                                     labels, cex = cex, font = text.font,
+                                                     MoreArgs = list(units = "user"))/yc)
+  ychar <- yextra + ymax
+  ymaxtitle <- cex[1] * par("cex") * xyc[2] * 1 # Only 1 since we don't use title
+  
+  text.width <- max(abs(mapply(strwidth, labels, cex = cex,
+                               font = text.font, MoreArgs = list(units = "user"))))
+  
+  xch1 <- colwise(xc, n.leg, ncol, n.legpercol, fun = function(x) max(abs(x)))
+  x.interspCol <- colwise(x.intersp, n.leg, ncol, n.legpercol, 
+                                          fun = max)
+  
+
+  w0 <- text.width + (x.interspCol + 1) * xch1
+  
+  # These 2 just fetch actual data for simplicity and to be certain 
+  top = lgp$rect$top
+  left = lgp$rect$left
+  
+  xextra <- 0 # Also simplified since no title
+  
+  xt <- left + xc + xextra + rep(c(0, cumsum(w0))[1L:ncol], 
+                                 each = n.legpercol, length.out = n.leg)
+  topspace <- 0.5 * ymax # Also simplified since no title
+  yt <- top - topspace - cumsum((c(0, ychar)/2 + c(ychar, 0)/2)[1L:n.legpercol])
+  
+  xbox <- xc * 0.8
+  ybox <- yc * 0.5
+  ####
+  
+  # From the top
+  rows = 4
   
   #rect(lgp$rect$left+1*cx, bott+txth*2,
   #     lgp$rect$left+(1+0.8)*cx, bott+txth*2-0.5*cy, col="red")
   
+  dotspacex = 0.2*xbox[rows] #4*(par("cxy")[1]/par("cra")[1])*cex
+  dotspacey = 0.25*ybox[rows]
+
+  dot_box(xt[rows] + dotspacex, # Left
+          yt[rows] + ybox[rows]/2 - ybox[rows] + dotspacey/2, # Bottom
+          xt[rows] + xbox[rows] - dotspacex, # Right
+          yt[rows] + ybox[rows]/2 - dotspacey/2, # Top
+          by=dotspacex, by2=dotspacey) # Dot spacings
+  
+  ## Old formula
+  #bott = lgp$rect$top - lgp$rect$h
+  #cx = par("cxy")[1] * cex
+  #cy = par("cxy")[2]
+  #txth = max(mapply(strheight, labels))
+  #lh = par("lheight")
+  
   # To move the box one line up, increase the multiplier of last monomial (in 2nd and 4th argument) by 1
   # E.g. 0*cy*lh is lowest line, 1*cy*lh is 2nd from the bottom
-  dotspacex = 4*(par("cxy")[1]/par("cra")[1])
-  dot_box(lgp$rect$left+1.14*cx, bott + txth*2 + (0.1-0.5)*cy + 0*cy*lh,
-          lgp$rect$left+(1+0.8-0.14)*cx, bott + txth*2 - 0.1*cy + 0*cy*lh, by=dotspacex, by2=0.15*cy)
+  #rect2(left = xt, top = yt + ybox/2, dx = xbox, dy = ybox)
+  #dot_box(lgp$rect$left+1.14*cx, bott + txth*2*cex + (0.1-0.5)*cy + 0*cy*lh,
+  #        lgp$rect$left+(1+0.8-0.14)*cx, bott + txth*2*cex - 0.1*cy + 0*cy*lh,
+  #        by=dotspacex, by2=0.15*cy)
 }
+
 
 # Draws a bar plot with scores of each player in dataset.
 #   dat - a dataset
@@ -223,7 +323,7 @@ player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1,
     numlab_adj = c(1, 0)
   }
   
-  if (tofile != FALSE) png(tofile, 1280, 720)
+  if (tofile != FALSE) png(tofile, 1024, 600)
   positions = barplot(valmatrix, names.arg=dat$per_player$name, horiz=horiz,
                       col=barcolors, ylim=ylim, xlim=xlim, space=0.1,
                       main=bquote(atop(bold(paste(.(dat$faction), " players")),
@@ -238,8 +338,8 @@ player_plot = function(dat, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=1,
   if (length(positions) > 1) { bardist = (positions[2] - positions[1]) / 1.1
   } else { bardist = positions[1] * 2 / 1.2 }
   
-  dotspacey = max(sumvals)/100
-  dotspacex = 4*(par("cxy")[1]/par("cra")[1])
+  dotspacey = max(sumvals)/75
+  dotspacex = 5*(par("cxy")[1]/par("cra")[1])
   
   dot_end_y = unlist(vals[1,])
   if (its_pa)
@@ -1012,7 +1112,7 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
   
   top_lim = max_val*1.30
   
-  if (tofile != FALSE) png(tofile, 1920, 1080)
+  if (tofile != FALSE) png(tofile, 1024, 600)
   
   out = plot(names(per_hour), y=NULL, type="n", xlim=c(0, info$battle_length), ylim=c(0, top_lim),
              main=bquote(atop(bold("Timeline"), scriptstyle(paste("of battle #", .(info$number), " in ",
@@ -1070,8 +1170,8 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
     cols = c(cols, faction$color)
     faction_names = c(faction_names, faction$faction)
   }
-  legend(info$battle_length, top_lim*1, faction_names, fill=cols, xjust=1, yjust=1, ncol=3, cex=1,
-         x.intersp=0.6, y.intersp=0.8)
+  legend(info$battle_length, top_lim*1, faction_names, fill=cols, xjust=1, yjust=1, ncol=3, cex=0.9,
+         x.intersp=0.2, y.intersp=0.7)
   
   if (tofile != FALSE)
   {
@@ -1080,4 +1180,22 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
   }
   
   return(invisible(timelines))
+}
+
+player_hittime_frequency = function(dat, playername, nopassive=TRUE, tofile=FALSE, title=NULL, ...)
+{
+  freqtable = table(get_player_hit_minutes(dat, playername))
+  faction = dat$per_player[which(dat$per_player$name==playername),"faction"]
+  
+  if (is.null(title)) title = paste0("Frequency of ",playername, "'s non-passive hit times")
+  
+  if (tofile != FALSE) png(tofile, 1024, 600)
+  
+  p=barplot(freqtable, main=title,
+          ylab="Frequency", xlab="Minute of a cycle", col=faction_colors[[faction]], ...)
+  
+  if (tofile != FALSE)
+  {
+    dev.off()
+  }
 }

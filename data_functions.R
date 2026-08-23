@@ -115,6 +115,21 @@ betterstrsplit = function(string, split, ...)
   return(x)
 }
 
+get_player_hit_minutes = function(dat, playername, nopassive=TRUE)
+{
+  times = dat$raw[which(dat$raw$name == playername),]
+  if (nopassive)
+  {
+    passive = which(times$mode=="PASSIVE_PLAY")
+    if (length(passive) > 0) times = times[-passive,]
+  }
+  
+  stamps = times$timestamp
+  minutes = as.integer(format(as.POSIXct(stamps, tz="UTC", origin="1970-01-01"), format="%M"))
+  
+  return(minutes)
+}
+
 # Reads battle data file.
 # (the one containing general info such as battle number, start time, etc.)
 #   filename - path to the file to be read
@@ -202,7 +217,7 @@ prepare_battleinfo = function(battleinfo, required=c("all"), rawset=NULL, warn=T
     else if (! all(is.null(rawset)) )
     {
       # this monster returns number of occurrences of each land in the events
-      t=table(vapply(strsplit(sets$ALL$raw$tileId, "-"), function(vect) {return(vect[1])}, c(""), USE.NAMES=F))
+      t=table(vapply(strsplit(rawset$tileId, "-"), function(vect) {return(vect[1])}, c(""), USE.NAMES=F))
       
       info$place = names(t)[which(t == max(t))]
     }

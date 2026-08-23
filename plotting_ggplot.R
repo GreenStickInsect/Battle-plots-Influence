@@ -13,7 +13,8 @@
 # Standard plot style for variety of charts
 theme_standard = theme_minimal() +
   theme(plot.title = element_text(hjust=0.5), plot.subtitle = element_text(hjust=0.5),
-        legend.text = element_text(size=rel(1)), legend.title = element_text(size=rel(1.2), face="bold", hjust=0.5))
+        legend.text = element_text(size=rel(1)),
+        legend.title = element_text(size=rel(1.2), face="bold", hjust=0.5))
 
 # Plot style for piecharts
 theme_piechart = theme_standard +
@@ -179,55 +180,39 @@ sourceplot_piechart__ = function(dat, battleinfo=NULL, tofile=FALSE, mode=FALSE)
 sourceplot_piechart = ensure_isolation(sourceplot_piechart__, "sourceplot_piechart") # Just a tiny safety-ensuring wrapper, see data_functions.R
 
 
-# Draws a density plot of hits within a cycle (per minute).
+# hitdensity, hitdensity_ridge, hitdensity_data
+# Function hitdensity draws a density plot of hits within a cycle (per minute).
+#   returns: a ggplot object which was used to draw the plot
+# Function hitdensity_ridge draws the same plot, but as a "ridge plot". Requires library ggridge.
+#   returns: a ggplot object which was used to draw the plot
+# Function hitdensity_data is internal and generates data required to draw the plots.
+#   returns: a list with all required values.
+# Arguments:
 #   dat - A dataset.
 #   battleinfo - An (optional) list of additional info about the battle, usually published along with IP spend data.
+#   adjust - A multiplier to apply to the automatically calculated smoothing bandwidth.
+#             See ggplot2::stat_density for details.
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
-#
-#   returns: a ggplot object which was used to draw the plot
-hitdensity = function(dat, battleinfo=NULL, tofile=FALSE)
+hitdensity = function(dat, battleinfo=NULL, adjust = 0.2, tofile=FALSE)
 {
-  info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
-  
-  minutes = c()
-  types = c()
-  for (i in seq(1, length(dat$raw$user)))
-  {
-    row = dat$raw[i,]
-    if (row$mode == "PASSIVE_PLAY") next
-    else if (row$mode == "AUTO") next
-    
-    time = as.POSIXct(row$timestamp, tz="UTC", origin="1970-01-01")
-    minute = as.integer(format(time, format="%M")) + 1
-
-    type = switch(row$mode,
-                  "MANUAL" = "Manual",
-                  "DIRECT_PLAY" = "Direct Play")
-    types = c(types, type)
-    types = c(types, "Any")
-    minutes = c(minutes, minute, minute)
-  }
-  
-  df = data.frame(
-    minute = minutes,
-    type=factor(types, c("Any", "Manual", "Direct Play"))
-  )
-  
-  xlabs = as.character(seq(2,60,2))
-  xlabs = ifelse(nchar(xlabs) == 1, paste0("0",xlabs), paste0("",xlabs))
+  values = hitdensity_data(dat, battleinfo)
   
   if (tofile != FALSE) png(tofile, 1280, 720)
   
-  plt = ggplot(df, aes(x=minute, color=type, fill=type)) +
-    geom_density(alpha=0.35) +
-    scale_fill_manual("Hit method", values=c("Any"="gray40","Manual"="orange", "Direct Play"="blue"),
-                      limits=c("Any", "Manual", "Direct Play")) +
-    scale_color_manual("Hit method", values=c("Any"="gray20","Manual"="orange2", "Direct Play"="blue2"),
-                       limits=c("Any", "Manual", "Direct Play")) +
-    scale_x_continuous(breaks=seq(2,60,2), labels = xlabs, expand=0) +
-    labs(title="Density of hits across a cycle", subtitle=paste0("battle #", info$number, " in ", info$place)) +
+  plt = ggplot(values$data, aes(x=minute, color=type, fill=type)) +
+    geom_density(alpha=0.35, adjust=adjust) +
+    geom_vline(data=values$medians, aes(xintercept=x, color=type, linetype="Median")) +
+    scale_fill_manual("Hit method", values=c("Any"="gray40","Manual"="orange",
+                                             "Direct Play"="blue", "Passive Play"="cyan2")) +
+    scale_color_manual("Hit method", values=c("Any"="gray20","Manual"="orange2",
+                                              "Direct Play"="blue2", "Passive Play"="cyan3")) +
+    scale_linetype_manual("", values="dashed") +
+    scale_x_continuous(breaks=values$xlabs, labels = values$xlabs_str, expand=0) +
+    scale_y_continuous(expand=expansion(mult=c(0, 0.02))) +
+    labs(title="Probability density of hits across a cycle",
+         subtitle=paste0("battle #", values$info$number, " in ", values$info$place)) +
     xlab("Minute of a cycle") +
-    ylab("Density") +
+    ylab("Probability density") +
     theme_standard
   
   print(plt)
@@ -239,8 +224,92 @@ hitdensity = function(dat, battleinfo=NULL, tofile=FALSE)
   return(invisible(plt))
 }
 
+hitdensity_ridge = function(dat, battleinfo=NULL, adjust = 0.2, tofile=FALSE)
+{
+  values = hitdensity_data(dat, battleinfo)
+  
+  if (tofile != FALSE) png(tofile, 1280, 720)
+  
+  plt = ggplot(values$data, aes(x=minute, y=y, height=after_stat(density), color=type, fill=type)) +
+    geom_density_ridges(alpha=0.35, stat="density", adjust=adjust) +
+    geom_segment(data=values$medians,
+                 aes(x=x, xend=x, y=y, yend=y+2, color=type, linetype="Median"),
+                 inherit.aes=F, key_glyph=draw_key_vline) +
+    scale_fill_manual("Hit method",
+                      values=c("Any"="gray40","Manual"="orange",
+                               "Direct Play"="blue", "Passive Play"="cyan2")) +
+    scale_color_manual("Hit method",
+                       values=c("Any"="gray20","Manual"="orange2",
+                                "Direct Play"="blue2", "Passive Play"="cyan3")) +
+    scale_linetype_manual("", values="dashed") +
+    scale_x_continuous(breaks=values$xlabs, labels = values$xlabs_str, expand=0) +
+    scale_y_continuous(breaks=c(), expand=0) +
+    labs(title="Probability density of hits across a cycle",
+         subtitle=paste0("battle #", values$info$number, " in ", values$info$place)) +
+    xlab("Minute of a cycle") +
+    ylab("Probability density") +
+    theme_standard
+  
+  print(plt)
+  
+  if (tofile != FALSE)
+  {
+    dev.off()
+  }
+  return(invisible(plt))
+}
 
-hitdensity_anim = function(dat, battleinfo=NULL, tofile=FALSE)
+hitdensity_data = function(dat, battleinfo)
+{
+  info = prepare_battleinfo(battleinfo, required=c("number", "place"), dat$raw)
+  
+  minutes = c()
+  types = c()
+  y_pos = c()
+  for (i in seq(1, length(dat$raw$user)))
+  {
+    row = dat$raw[i,]
+    if (row$mode == "PASSIVE_PLAY") next
+    else if (row$mode == "AUTO") next
+    
+    time = as.POSIXct(row$timestamp, tz="UTC", origin="1970-01-01")
+    minute = as.integer(format(time, format="%M"))
+    second = as.integer(format(time, format="%S"))
+    minute = minute + second/60
+    
+    y = switch(row$mode, DIRECT_PLAY=1, MANUAL=3)
+    types = c(types, row$mode)
+    types = c(types, "Any")
+    minutes = c(minutes, minute, minute)
+    y_pos = c(y_pos, y, 2)
+  }
+  
+  df = data.frame(
+    minute = minutes,
+    type=factor(types, levels=c("Any", "MANUAL", "DIRECT_PLAY"),# "PASSIVE_PLAY"),
+                labels=c("Any", "Manual", "Direct Play")),#, "Passive Play"))
+    y=y_pos
+  )
+  
+  # Calculate median values
+  medians = c()
+  for (type in levels(df$type))
+  {
+    medians = c(medians, median(df$minute[which(df$type == type)]))
+  }
+  df_medians = data.frame(x=medians, type=levels(df$type))
+  df_medians$y = sapply(levels(df$type), switch, "Direct Play"=1,
+                        "Any"=2, "Manual"=3)
+  
+  xlabs = seq(2,60,2)
+  xlabs_str = as.character(xlabs)
+  xlabs_str = ifelse(nchar(xlabs_str) == 1, paste0("0",xlabs_str), xlabs_str)
+  
+  return(list(data=df, medians=df_medians, xlabs=xlabs, xlabs_str=xlabs_str, info=info))
+}
+
+
+hitdensity_anim = function(dat, battleinfo=NULL, adjust=0.2, tofile=FALSE)
 {
   info = prepare_battleinfo(battleinfo, required=c("number", "place", "start"), dat$raw)
   
@@ -280,7 +349,8 @@ hitdensity_anim = function(dat, battleinfo=NULL, tofile=FALSE)
   singular = df[group_sizes == 1,]
   
   plt = ggplot() +
-    geom_density(data=df_clean, aes(x=minute, color=type, fill=type, group=type), alpha=0.35) +
+    geom_density(data=df_clean, aes(x=minute, color=type, fill=type, group=type),
+                 alpha=0.35, adjust=adjust) +
     geom_vline(data=singular, aes(xintercept=minute, color=type, group=type)) +
     scale_fill_manual("Hit method", values=c("Any"="gray40","Manual"="orange", "Direct Play"="blue"),
                       limits=c("Any", "Manual", "Direct Play")) +

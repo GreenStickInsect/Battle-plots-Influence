@@ -60,7 +60,7 @@ ENABLE_ANIMATED_PLOTS = FALSE
 faction_colors = data.frame(CI="#1aa44f", MT="#fc8c36", DC="#3f5fde",
                             PS="#beff64", BB="#ff496c", FG="#0099ff",
                             CO="#9c6aff", RG = "#00bfa5", CR="#b20000",
-                            YY="#bcab8f", NO_TEAM="#303030", XX="#303030")
+                            AN="#cabfb0", NO_TEAM="#303030", XX="#303030")
 
 
 # File names
@@ -103,12 +103,18 @@ if (ENABLE_ANIMATED_PLOTS) ENABLE_GGPLOT_PLOTS = TRUE
 
 # If ggplot2 is available, source advanced plotting functions
 ggplotgraphics = FALSE
+ridgeplot = FALSE
 if (ENABLE_GGPLOT_PLOTS)
 {
   if (require("ggplot2", quietly=T))
   {
     ggplotgraphics = TRUE
     source("plotting_ggplot.R")
+    
+    if (require("ggridges", quietly=T))
+    {
+      ridgeplot = TRUE
+    }
 
   } else
   {
@@ -232,7 +238,7 @@ for (s in sets)
 rm(s, text.cex) # cleanup
 
 
-## Team plot
+## Team plot 
 
 # Compare summary scores of each team.
 #
@@ -294,8 +300,15 @@ if (ggplotgraphics)
 ## Hit density across a cycle
 if (ggplotgraphics) # Requires ggplot2
 {
-  if (! export) {hitdensity(sets$ALL, battleinfo)
-  } else hitdensity(sets$ALL, battleinfo, tofile=paste0(name_hit_density_plot, file_suffix))
+  if (ridgeplot)
+  {
+    if (! export) {hitdensity_ridge(sets$ALL, battleinfo)
+    } else  hitdensity_ridge(sets$ALL, battleinfo, tofile=paste0(name_hit_density_plot, file_suffix))
+  } else
+  {
+    if (! export) {hitdensity(sets$ALL, battleinfo)
+    } else hitdensity(sets$ALL, battleinfo, tofile=paste0(name_hit_density_plot, file_suffix))  
+  }
 }
 
 
