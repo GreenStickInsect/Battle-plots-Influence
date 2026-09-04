@@ -877,17 +877,22 @@ vsplot = ensure_isolation(vsplot__, "vsplot") # Just a tiny safety-ensuring wrap
 # A variant of vsplot which compares a single player to all other players.
 #   dat - A dataset.
 #   playername - Name of user to be compared. Default to "Nex". (character)
+#   exclude - A vecor of names of players to exclude from the "others" bar. (character)
 #   labels - 2-element vector of labels for bars, first one being the player compared, 2nd other players. Defaults to c("One man army", "Others"). (character(2))
 #   tofile - path to file to which plot should be exported as .png . If FALSE, instead draws plot within R. Defaults to FALSE.
 #   ... - additional arguments to supply to vsplot().
 #
 #   returns: a list with some of parameters used to draw the plot, as returned by vsplot.
-nexplot = function(dat, playername="Nex", labels=c("One man army", "Others"), tofile=FALSE, ...)
+nexplot = function(dat, playername="Nex", exclude = character(0), labels=c("One man army", "Others"),
+                   tofile=FALSE, ...)
 {
   nexpos = which(dat$per_player$name == playername)
   if (length(nexpos) == 0) return(invisible(NULL))
-  datanex = dat$per_player[nexpos,] # player
-  dataothers = dat$per_player[-nexpos,] # Everyone except player
+  datanex = dat$per_player[nexpos,] # The player
+  
+  excludepos = c(nexpos, which(dat$per_player$name %in% exclude))
+  
+  dataothers = dat$per_player[-excludepos,] # Everyone except the player and excludes
   
   data=vsplot(list(Nex=datanex, Others=dataothers), labels, tofile=tofile, ylab=raw_ip_label, ...)
   return(invisible(data))
@@ -1101,7 +1106,15 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
     for (i in seq(1, length(faction$raw$user)))
     {
       row = faction$raw[i,]
-      hour = floor(row$timestamp/3600.0 - floor(info$start/3600.0)+1)
+      
+      hour = floor(row$timestamp/3600.0 - floor(info$start/3600.0) + 1)
+
+      # Sometimes, there are server or data-logging issues, so to be fault-proof...
+      # Values off by more than one are not corrected since that should not happen regardless
+      # of minor server issues and may indicate corrupted data
+      if (hour == 0) {hour = 1
+      } else if (hour == info$battle_length+1) hour = info$battle_length
+
       per_hour[[hour]] = per_hour[[hour]] + row$sumUsed
     }
     
@@ -1182,17 +1195,37 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
   return(invisible(timelines))
 }
 
-player_hittime_frequency = function(dat, playername, nopassive=TRUE, tofile=FALSE, title=NULL, ...)
+player_hittime_frequency = function(dat, playername, nopassive=TRUE, tofile=FALSE, title=NULL,
+                                    xaxis = TRUE, ...)
 {
-  freqtable = table(get_player_hit_minutes(dat, playername))
+  freqtable = table(get_player_hit_minutes(dat, playername, nopassive=nopassive))
+  if (length(freqtable) < 1)
+  {
+    stop("Selected player has no matching hit data! Verify the user name, supplied dataset or disable the 'nopassive' option.")
+  }
+  
   faction = dat$per_player[which(dat$per_player$name==playername),"faction"]
   
-  if (is.null(title)) title = paste0("Frequency of ",playername, "'s non-passive hit times")
+  if (is.null(title)) title = paste0("Frequency of ", playername, "'s hit times")
+  
+  if (max(freqtable) >= 40) {round_to = 10
+  } else if (max(freqtable) >= 20) {round_to = 5
+  } else if (max(freqtable) >= 10) {round_to = 2
+  } else round_to = 1
+  
+  yticks = floor(seq(0, max(freqtable), length.out=10)/round_to)*round_to
+  if (max(yticks) < max(freqtable)) yticks = c(yticks, max(yticks)+round_to)
   
   if (tofile != FALSE) png(tofile, 1024, 600)
   
-  p=barplot(freqtable, main=title,
-          ylab="Frequency", xlab="Minute of a cycle", col=faction_colors[[faction]], ...)
+  p=barplot(freqtable, main=title, space=0, names.arg=c(""), xlim=c(0,60), axes=F,
+          col=faction_colors[[faction]], ylim=c(0, max(yticks)*1.1), ...)
+  
+  axis(1, at=seq(0,60,by=5), labels=seq(0,60,by=5), tick=xaxis)
+  axis(2, at=yticks)
+  
+  title(xlab="Minute of a cycle", ylab="Frequency", line=2.3)
+  if (nopassive) title(sub="Passive Play hits were excluded", line=4, col.sub="gray40")
   
   if (tofile != FALSE)
   {

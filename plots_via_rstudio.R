@@ -329,7 +329,7 @@ if (! export) {timeline(sets, battleinfo)
 ## CR plot (if this is CR battle)
 
 # Compares CR score to total score of all other players
-if (battleinfo$attacker == "cr" | battleinfo$defender == "cr")
+if ("CR" %in% sets$ALL$raw$faction)
 {
   if (! export) {nexplot(sets$ALL, "cr", c("The Evil Force", "Stubborn Prey"))
   } else nexplot(sets$ALL, "cr", c("The Evil Force", "Stubborn Prey"), tofile=paste0(name_cr_plot, file_suffix))
@@ -347,8 +347,8 @@ if ("Nex" %in% sets$ALL$per_player$name)
 # Nexplot
 # if ("Nex" %in% sets$ALL$per_player$name)
 # {
-#   if (! export) {nexplot(sets$ALL)
-#   } else nexplot(sets$ALL, tofile="Nexplot.png")
+#   if (! export) {nexplot(sets$ALL, exclude=c("cr"))
+#   } else nexplot(sets$ALL, exclude=c("cr"), tofile="Nexplot.png")
 # }
 
 

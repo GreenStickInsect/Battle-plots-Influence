@@ -115,6 +115,89 @@ betterstrsplit = function(string, split, ...)
   return(x)
 }
 
+support_analysis = function(dataset, playername=NULL, tablename=NULL)
+{
+  supptable = data.frame(supported_vs_opposed=character(0), supported=character(0),
+                         opposed=character(0), used=numeric(0), applied=numeric(0))
+  
+  if (! is.null(playername))
+  {
+    dataset$raw = dataset$raw[which(dataset$raw$name == playername),]
+
+    if (nrow(dataset$raw) < 1)
+    {
+      stop("Selected player has no matching hit data! Verify the user name and supplied dataset.")
+    }
+  }
+  
+  for (i in seq(1, nrow(dataset$raw)))
+  {
+    row = dataset$raw[i,]
+    
+    if (row$action == "ATTACK")
+    {
+      supported = row$attacker
+      opposed = row$defender
+    } else
+    {
+      supported = row$defender
+      opposed = row$attacker
+    }
+    
+    suppvsopp = paste0(toupper(supported), " vs ", toupper(opposed))
+    
+    if (! suppvsopp %in% supptable$supported_vs_opposed)
+    {
+      supptable = rbind(supptable, list(supported_vs_opposed=suppvsopp, supported=toupper(supported),
+                                        opposed=toupper(opposed), used=0, applied=0))
+      dest = nrow(supptable)
+    } else dest = which(supptable$supported_vs_opposed == suppvsopp)
+    
+    supptable[dest, "used"] = supptable[dest, "used"] + row$sumUsed
+    supptable[dest, "applied"] = supptable[dest, "applied"] + row$ipApplied
+  }
+  
+  supptable = supptable[order(supptable$applied, decreasing=T),]
+  
+  if (! is.null(tablename)) {attr(supptable, "name") = tablename
+  } else if (! is.null(playername)) {attr(supptable, "name") = paste0(playername, " support analysis")
+  } else attr(supptable, "name") = paste0(playername, "Support analysis")
+  
+  class(supptable) = c("support_table", "data.frame")
+  
+  return(supptable)
+}
+
+print.support_table = function(supptable)
+{
+  space = 3
+  almost_last_len = max(8, nchar(format(max(supptable$used), scientific=F, big.mark=',')))
+  last_len = max(11, nchar(format(max(supptable$applied), scientific=F, big.mark=' ')))
+  
+  myformat = function(x, width = almost_last_len)
+  {
+    paste0(format(format(x, big.mark=' ', scientific=F), width=width, justify="right"),
+           strrep(' ', space))
+  }
+  
+  pts = strsplit(supptable$supported_vs_opposed, " vs ")
+  
+  tablename = attr(supptable, "name")
+  if (length(tablename) > 0) cat(paste0(tablename, '\n'))
+  
+  cat(paste0("supported", strrep(' ', space), "opposed", strrep(' ', space+almost_last_len-4),
+             "used", strrep(" ", space+last_len-7), "applied\n"))
+  for (i in seq(1, nrow(supptable)))
+  {
+    row = supptable[i,]
+    lth = length(as.character(row$used))
+    
+    cat(paste0(strrep(' ', 7), row$supported, strrep(' ', space),
+               strrep(' ', 5), row$opposed, strrep(' ', space),
+               myformat(row$used), myformat(row$applied, last_len), '\n'))
+  }
+}
+
 get_player_hit_minutes = function(dat, playername, nopassive=TRUE)
 {
   times = dat$raw[which(dat$raw$name == playername),]
