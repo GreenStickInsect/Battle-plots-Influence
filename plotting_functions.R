@@ -519,15 +519,15 @@ contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALS
   
   if (tofile != FALSE) png(tofile, 1280, 720)
   p = par(mar=par("mar")+0.5)
-  if (raw) ylab = raw_ip_label
-  else ylab = as.expression(bquote(paste("IP spent ", scriptstyle("(after bonuses)"))))
+  if (raw) ylab = as.expression(bquote(paste("Points ", bolditalic("spent"), " [millions of IP]")))
+  else ylab = as.expression(bquote(paste("Points ", bolditalic("applied"), " [millions of IP]")))
   
   positions = barplot(ordered_matrix, col=barcolors,
                       ylim=ylim, xlim=xlim, width=width,
                       main=bquote(atop(bold(.(maintitle)),
                                        scriptstyle(paste("battle #", .(info$number), " in ", .(info$place))) )),
                       sub = bquote(scriptstyle(.(subtitle))), axes=FALSE, las=1, srt=35, axisnames=FALSE,
-                      ylab=ylab, ...)
+                      ylab=ylab, xaxs='i', ...)
   
   bardist = positions[2] - positions[1]
   tickdist = round(vmax*1.1/15, digits=-3)
@@ -558,7 +558,7 @@ contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALS
     else if (i==5) COL = faction_cols
     
     text(X, Y, labels=usernames, family="mono",
-         srt=45, adj = c(1,0.5), col=COL, cex=1.1)
+         srt=45, adj = c(1,0.5), col=COL, cex=1.1, xpd=NA)
   }
   
   if (! is.null(cr_label))
@@ -567,9 +567,13 @@ contribution_plot__ = function(dat, battleinfo=NULL, tofile=FALSE, inverted=FALS
          col=faction_colors[["CR"]], cex=0.8)
   }
   
+  ylabs = format(seq(0, vmax*1.1, by=tickdist)/1e6, scientific=FALSE, big.mark=" ")
+  ylabs = sub(".$", '', sub("0+$", '', ylabs))
   axis(2, at=seq(0, vmax*1.1, by=tickdist),
-       labels=format(seq(0, vmax*1.1, by=round(vmax*1.1/15, digits=-3)), scientific=FALSE, big.mark=","),
-       lty="solid", las=2, line=-2, cex.axis=1)
+       labels=ylabs, tcl=-0.2, mgp=c(3,0.5,0),
+       lty="solid", las=2, cex.axis=0.9)
+  
+  mtext("[MIP]", side=2, las=2, at=vmax*1.1+tickdist)
   
   par(p)
   if (tofile != FALSE)
@@ -611,20 +615,22 @@ bonusplot__ = function(allset, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=
   if (is.null(lim))
   {
     vmax = ceiling(max(allset$per_player$avgbonus))
-    vmin = floor(min(allset$per_player$avgbonus))
+    vmin = min(allset$per_player$avgbonus)
   } else
   {
     vmin = lim[1]
     vmax = lim[2]
   }
   
-  ylim = c(min(0, vmin) - (vmax-vmin)*0.2, vmax + (vmax-vmin)*0.2)
+  exp = c(0,0)
+  ylim = c(min(0, vmin) - (vmax-vmin)*exp[1], vmax + (vmax-vmin)*exp[2])
   xlim = NULL
   if (horiz)
   {
     xlim = ylim
     ylim = NULL
   }
+  
   allset$per_player = allset$per_player[order(allset$per_player$avgbonus, decreasing=TRUE),]
   
   if (tofile != FALSE) png(tofile, 1280, 720)
@@ -634,16 +640,16 @@ bonusplot__ = function(allset, battleinfo=NULL, lim=NULL, horiz=FALSE, text.cex=
                       col=allset$per_player$color, ylim=ylim, xlim=xlim,
                       main=bquote(atop(bold("Average IP bonus per player"),
                                        scriptstyle(paste("battle #", .(info$number), " in ", .(info$place))))),
-                      axes=FALSE, las=1, axisnames=FALSE, ...)
+                      axes=FALSE, las=1, axisnames=FALSE, xaxs='i', yaxs='i', ...)
   
   namepos = allset$per_player$avgbonus
-  for (i in seq(length(namepos))) namepos[i] = min(0, namepos[i]) - (vmax-vmin)*0.05
-  text(positions, namepos,
+  for (i in seq(length(namepos))) namepos[i] = min(0, namepos[i]) - (vmax-vmin)*0.02
+  text(positions, namepos, xpd=NA,
        labels=allset$per_player$name, srt=45, adj = c(1,0.5))
   
   positive = ifelse(allset$per_player$avgbonus < 0, 0, 1)
   text(positions, (allset$per_player$avgbonus * positive)+(vmax-vmin)*0.05,
-       cex = text.cex, srt=60, adj=c(0,0),
+       cex = text.cex, srt=60, adj=c(0,0), xpd=NA,
        labels=paste(format(allset$per_player$avgbonus*100, big.mark=" ", digits=2, scientific=FALSE),"%", sep=""))
   
   par(p)
@@ -1195,18 +1201,32 @@ timeline = function(sets, battleinfo=NULL, tofile=FALSE, ...)
   return(invisible(timelines))
 }
 
-player_hittime_frequency = function(dat, playername, nopassive=TRUE, tofile=FALSE, title=NULL,
-                                    xaxis = TRUE, ...)
+player_hittime_frequency = function(dat, playername=NA_character_, modes=c("MANUAL", "DIRECT_PLAY"),
+                                    tofile=FALSE, title=NULL, xaxis = TRUE, ...)
 {
-  freqtable = table(get_player_hit_minutes(dat, playername, nopassive=nopassive))
+  freqtable = table(get_player_hit_minutes(dat, playername, modes=modes))
   if (length(freqtable) < 1)
   {
-    stop("Selected player has no matching hit data! Verify the user name, supplied dataset or disable the 'nopassive' option.")
+    if (is.na(playername))
+    {
+      stop("The supplied dataset has no matching data! Verify the dataset or change the 'modes' option.")
+    } else
+    {
+      stop("Selected player has no matching hit data! Verify the user name, supplied dataset or change the 'modes' option.")
+    }
   }
   
-  faction = dat$per_player[which(dat$per_player$name==playername),"faction"]
+  if (! is.na(playername))
+  {
+    faction = dat$per_player[which(dat$per_player$name==playername),"faction"]
+    player = playername
+  } else
+  {
+    faction = dat$faction
+    player = faction
+  }
   
-  if (is.null(title)) title = paste0("Frequency of ", playername, "'s hit times")
+  if (is.null(title)) title = paste0("Frequency of ", player, "'s hit times")
   
   if (max(freqtable) >= 40) {round_to = 10
   } else if (max(freqtable) >= 20) {round_to = 5
@@ -1225,7 +1245,9 @@ player_hittime_frequency = function(dat, playername, nopassive=TRUE, tofile=FALS
   axis(2, at=yticks)
   
   title(xlab="Minute of a cycle", ylab="Frequency", line=2.3)
-  if (nopassive) title(sub="Passive Play hits were excluded", line=4, col.sub="gray40")
+  title(sub=paste0("Including modes: ",
+                   paste(collapse=", ", toTitleCase(tolower(sub('_', ' ', modes))))),
+        line=4, col.sub="gray40")
   
   if (tofile != FALSE)
   {

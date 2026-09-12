@@ -28,6 +28,10 @@
 #   returns: wrapper function.
 ensure_isolation = function(f__, fname)
 {
+  # Force evaluation (so that lazy evaluation does not mess with us here)
+  force(f__)
+  force(fname)
+  
   wrapper = function(...)
   {
     # Save original settings
@@ -198,14 +202,15 @@ print.support_table = function(supptable)
   }
 }
 
-get_player_hit_minutes = function(dat, playername, nopassive=TRUE)
+get_player_hit_minutes = function(dat, playername=NA_character_, modes=c("MANUAL", "DIRECT_PLAY"))
 {
-  times = dat$raw[which(dat$raw$name == playername),]
-  if (nopassive)
+  if (! is.na(playername))
   {
-    passive = which(times$mode=="PASSIVE_PLAY")
-    if (length(passive) > 0) times = times[-passive,]
-  }
+    times = dat$raw[which(dat$raw$name == playername),]
+  } else times = dat$raw
+  
+  wrongmode = which(! times$mode %in% modes)
+  if (length(wrongmode) > 0) times = times[-wrongmode,]
   
   stamps = times$timestamp
   minutes = as.integer(format(as.POSIXct(stamps, tz="UTC", origin="1970-01-01"), format="%M"))
@@ -337,10 +342,10 @@ prepare_battleinfo = function(battleinfo, required=c("all"), rawset=NULL, warn=T
 # Note #3: if data comes in an old format, some columns might be missing or renamed.
 #          You can reformat the data after reading, with ensure_modern_format
 
-# Dataset format is list of:
-#   faction - name of team which this dataset belongs to
-#   color - color of said team
-#   raw - A data.frame with following columns: (these might vary depending on file contents)
+# Dataset is a list of:
+#   faction - name of team which this dataset represents (if applicable; otherwise name of this dataset)
+#   color - color of said team (or any color representing this dataset)
+#   raw - A data.frame with following columns: (this is assuming standard input file, may vary otherwise)
 #     battle - battle number (numeric)
 #     timestamp - Unix timestamp of this event (numeric)
 #     name - username (non-unique) of player who triggered this event (character)
@@ -357,25 +362,12 @@ prepare_battleinfo = function(battleinfo, required=c("all"), rawset=NULL, warn=T
 #     sumUsed - total raw (before bonuses) IP used (sum of ipUsed and bipUsed) (numeric)
 #     color - RGB (in hex) color of team the player belongs to (character)
 #
-#   per_player - A data.frame with following columns:
-#     name - username (non-unique) of a player (character)
-#     user - user id (unique) of a player (character)
-#     ipUsed - raw (before bonuses) IP from playing Influence games (excluding DirectPlay feature) (numeric)
-#     bipUsed - raw (before bonuses) BIP from Discord (numeric)
-#     DPUsed - raw (before bonuses) IP from Direct Play feature (numeric)
-#     PPUsed - raw (before bonuses) IP from Passive Play feature (numeric)
-#     sumUsed - total raw (before bonuses) IP used (sum of ipUsed, DPUsed and bipUsed) (numeric)
-#     ipApplied - total IP applied to tile (after bonuses) (numeric)
-#     faction - name of team player belongs to (character)
-#     color - RGB (in hex) color of team the player belongs to (character)
-#     bot - Whether or not this user is an automatic bot (i.e. faction's automatic attack mechanism) (logical)
-     
+#   per_player - A data.frame (missing in output), see function prepare_per_player() for details
 
 # Arguments:
 #   filename - path to the file with data to be read.
 #
 #   returns: a list
-
 prepare_someset = function(filename)
 {
   data = read.csv(filename, header=TRUE, sep=",")
@@ -407,11 +399,11 @@ prepare_someset = function(filename)
 # The format of the input data has been changing in the past.
 # To ensure backwards-compatibility, this tool converts old data formats
 # to the modern one supported by other functions.
-#   dataset - An unmodified dataset, as returned by prepare_someset (list). Note, that only the "raw" dataset
+#   dataset - An unmodified dataset, as returned by prepare_someset() (a list). Note, that only the "raw" dataset
 #             will be reformatted - if you already created some other data (e.g. per_player dataset) based on
-#             it, it will not be updated and will need to be re-created.
+#             it, it will not be updated and may need to be re-created.
 #
-#   returns: a list (reformatted dataset)
+# returns: a list (reformatted dataset)
 ensure_modern_format = function(dataset)
 {
   raw = dataset$raw
@@ -445,7 +437,7 @@ ensure_modern_format = function(dataset)
 # These columns are often needed by other functions, so this step of data preparation should not be skipped.
 #   dataset - An unmodified dataset, as returned by prepare_someset or ensure_modern_format. (list)
 #
-#   returns: a list (expanded dataset)
+# returns: a list (expanded dataset)
 add_convenience_columns = function(dataset)
 {
   raw = dataset$raw
@@ -475,10 +467,24 @@ read_and_reformat_dataset = function(filename)
 
 
 # Creates a "per_player" data frame (listing summarical scores of each player in a dataset)
-# See docstring of function "prepare_someset" for the format of such data frame
+# The format is as follows:
+# data.frame:
+#   name - username (non-unique) of a player (character)
+#   user - user id (unique) of a player (character)
+#   ipUsed - raw (before bonuses) IP from playing Influence games (excluding DirectPlay feature) (numeric)
+#   bipUsed - raw (before bonuses) BIP from Discord (numeric)
+#   DPUsed - raw (before bonuses) IP from Direct Play feature (numeric)
+#   PPUsed - raw (before bonuses) IP from Passive Play feature (numeric)
+#   sumUsed - total raw (before bonuses) IP used (sum of ipUsed, DPUsed and bipUsed) (numeric)
+#   ipApplied - total IP applied to tile (after bonuses) (numeric)
+#   faction - name of team player belongs to (character)
+#   color - RGB (in hex) color of team the player belongs to (character)
+#   bot - Whether or not this user is an automatic bot (i.e. faction's automatic attack mechanism) (logical)
+
+# Arguments:
 #   rawall - "raw" data.frame of a dataset (see docstring of function "prepare_someset" for the format of such data frame)
 #
-#   returns: a data.frame
+# returns: a data.frame as described above.
 prepare_per_player = function(rawall)
 {
   per_player = data.frame(name="", user="", ipUsed=0, bipUsed=0, DPUsed=0, PPUsed=0,

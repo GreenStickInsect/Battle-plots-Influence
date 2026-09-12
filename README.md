@@ -15,12 +15,13 @@ An [R programming language](<https://www.r-project.org/>) application for visual
 - [Install RStudio](<https://posit.co/download/rstudio-desktop/>) - for now the only (easy) way to run the app is through it. I *might* add a command-line interface in future.
 - (optional) Install [ggplot2](https://ggplot2.tidyverse.org/) by running `install.packages("ggplot2")` (well, or some other way, if you have a preferred method).
 - (optional) Install [gganimate](<https://gganimate.com/>) by running `install.packages("gganimate")`.
+- (optional) Install [ggridges](<https://wilkelab.org/ggridges/>) by running `install.packages("ggridges")`.
 - Clone the repository to your computer - best done via command-line with **[git](<https://git-scm.com/>)**, but as simple as this repo is, you can also just click download on the files you need.
 - Create a folder with battle data somewhere on your device.
   - battle data includes a CSV file with ip spend data and a file containing copy of general battle data (posted on Discord along every data set). You might need to create the latter manually.
     - While general battle data file is technically not required, many plots will be less accurate or even won't work without the information contained inside.
     - There is an example in folder [battle_xxx](</battle_xxx>).
-  - If you create the folder within repo, it is recommended to use names such as "battle_???" since these are covered by `.gitignore`.
+  - If you create the folder within repo, it is recommended to use names such as "battle_<something>" since these are covered by `.gitignore`.
 - Open the source file `plots_via_rstudio.R` in RStudio (`File -> Open File...`).
 - Head to the 'Manually changed variables' section and set the control variables as follows:
   - `directory` - path to the directory with battle data (the one you created a moment ago).

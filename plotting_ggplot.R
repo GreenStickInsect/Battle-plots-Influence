@@ -10,16 +10,24 @@
 # Please be aware, following functions are often not designed to fail gracefully if invalid data is supplied.
 # Use with care.
 
+
+# The folllowing constants are defined as promises so as to allow sourcing this file
+# even without ggplot2 loaded.
+
 # Standard plot style for variety of charts
-theme_standard = theme_minimal() +
-  theme(plot.title = element_text(hjust=0.5), plot.subtitle = element_text(hjust=0.5),
-        legend.text = element_text(size=rel(1)),
-        legend.title = element_text(size=rel(1.2), face="bold", hjust=0.5))
+delayedAssign("theme_standard",
+  theme_minimal() +
+    theme(plot.title = element_text(hjust=0.5), plot.subtitle = element_text(hjust=0.5),
+          legend.text = element_text(size=rel(1)),
+          legend.title = element_text(size=rel(1.2), face="bold", hjust=0.5))
+)
 
 # Plot style for piecharts
-theme_piechart = theme_standard +
-  theme(panel.grid = element_blank(), axis.text=element_text(size=rel(1), face="bold"),
-        axis.title = element_blank())
+delayedAssign("theme_piechart",
+  theme_standard +
+    theme(panel.grid = element_blank(), axis.text=element_text(size=rel(1), face="bold"),
+          axis.title = element_blank())
+)
 
 
 # Draws a pie chart which compares usage of various playing methods.
@@ -351,7 +359,6 @@ hitdensity_anim = function(dat, battleinfo=NULL, adjust=0.2, tofile=FALSE)
   plt = ggplot() +
     geom_density(data=df_clean, aes(x=minute, color=type, fill=type, group=type),
                  alpha=0.35, adjust=adjust) +
-    geom_vline(data=singular, aes(xintercept=minute, color=type, group=type)) +
     scale_fill_manual("Hit method", values=c("Any"="gray40","Manual"="orange", "Direct Play"="blue"),
                       limits=c("Any", "Manual", "Direct Play")) +
     scale_color_manual("Hit method", values=c("Any"="gray20","Manual"="orange2", "Direct Play"="blue2"),
@@ -362,6 +369,11 @@ hitdensity_anim = function(dat, battleinfo=NULL, adjust=0.2, tofile=FALSE)
     xlab("Minute of a cycle") +
     ylab("Density") +
     theme_standard
+  
+  if (nrow(singular) > 0)
+  {
+    plt = plt + geom_vline(data=singular, aes(xintercept=minute, color=type, group=type))
+  }
   
   a = gganimate::animate(plt,
                          nframes=300, fps=8, units="in", width=8, height=4, res=200)
