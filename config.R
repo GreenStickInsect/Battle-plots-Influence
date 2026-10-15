@@ -10,3 +10,9 @@ faction_colors = data.frame(CI="#1aa44f", MT="#fc8c36", DC="#3f5fde",
                             AN="#cabfb0",
                             All="#dddddd", NO_TEAM="#303030", XX="#303030" # Technical
                             )
+
+# This is a list of functions from the app execution environment which need to be imported into user's
+# environment for optimal experience. The importing of tools is done via 'eval_dependencies()' in
+# "plots_cli.R" and may optionally be disabled. Only use where necessary, filling user's environment with
+# random functions is not a good practice.
+global_imports = c("print.support_table")

@@ -38,6 +38,11 @@ add_package = function(envmt, pkg)
 #   bonus_packages - (optional) vector of names of packages that are to be made available to the
 #                     environment. Note that these will be imported privately, as only accessible to
 #                     functions within the environment and not from the outside.
+#   import_tools - Whether to import tools into the global environment. The "tools" primarily include
+#                   methods for special classes created by this app, such as print.class methods, which
+#                   need to be in global environment to have effect on user experience. The list of
+#                   functions requiring import is defined through the vector 'global_imports' in
+#                   "config.R". Defaults to TRUE.
 #   ggplot - (optional) Whether 'ggplot2' is to be imported (privately). Should the
 #             package be unavailable, a warning will be shown.
 #             Sets the logical value 'ggplotgraphics' within the environment, noting whether the
@@ -49,12 +54,18 @@ add_package = function(envmt, pkg)
 #               library had been successfully imported.
 #
 # returns: An execution environment for the Battle Plots Influence app.
-eval_dependencies = function(sourcedir, Env=NULL, bonus_packages=c(), ggplot=FALSE, animated=FALSE)
+eval_dependencies = function(sourcedir, Env=NULL, bonus_packages=c(), import_tools=TRUE,
+                             ggplot=FALSE, animated=FALSE)
 {
   # Create the destination environment if not supplied by user
   if (is.null(Env))
   {
     Env = new.env(parent=baseenv())
+  }
+  
+  if (! import_tools)
+  {
+    warning("Tool import is disabled (argument 'import_tools'), some QoL features will be disabled!")
   }
   
   # Insert new environment "Deps" into Env's search path
@@ -130,6 +141,17 @@ eval_dependencies = function(sourcedir, Env=NULL, bonus_packages=c(), ggplot=FAL
            Animated plots cannot be drawn without it and will be skipped.")
   }
   
+  # Import tools into user's global env, unless disabled
+  # TODO: Make this a package-like object instead of directly assigning, which is dirty and volatile
+  if (import_tools)
+  {
+    glob = globalenv()
+    for (fun in Env$global_imports)
+    {
+      assign(fun, Env[[fun]], pos=glob)
+    }
+  }
+  
   return(Env)
 }
 
@@ -167,6 +189,7 @@ generate_datasets = function(battleplots_env, filenames)
     if (i == 1) next
     allset$raw = rbind(allset$raw, nonesets[[i]]$raw)
   }
+  allset = bplt$fix_duplicates(allset)
   
   # Create a list of datasets, containing the "ALL" dataset created above
   sets = list(ALL=allset)

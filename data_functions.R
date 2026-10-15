@@ -536,6 +536,69 @@ prepare_per_player = function(rawall)
   return(per_player)
 }
 
+
+# TODO: Documentation, optimization
+fix_duplicates = function(dataset)
+{
+  dusers = list()
+  dnames = list()
+  newraw = data.frame()
+  for (i in seq(nrow(dataset$raw)))
+  {
+    row = dataset$raw[i,]
+    user = row$user
+    name = row$name
+    
+    if (user %in% names(dusers))
+    {
+      if (name != dusers[[user]])
+      {
+        row$name = dusers[[user]]
+      }
+    } else
+    {
+      newname = character(0)
+      if (name %in% names(dnames))
+      {
+        lastname = dnames[[name]][length(dnames[[name]])]
+        suffix = sub("^.*_([0-9])+\\*$", "\\1", lastname)
+        if (suffix == lastname) suffix = "1"
+        
+        num = as.numeric(suffix) + 1
+        
+        newname = paste0(name, '_', num, '*')
+        dnames[[name]] = c(dnames[[name]], newname)
+      } else
+      {
+        newname = name
+        dnames[[name]] = newname
+      }
+      
+      dusers[[user]] = newname
+      row$name = newname
+    }
+    
+    newraw = rbind(newraw, row)
+  }
+  dataset$raw = newraw
+  
+
+  if (! is.null(dataset$per_player))
+  {
+    newpp = data.frame()
+    for (i in seq(nrow(dataset$per_player)))
+    {
+      row = dataset$per_player[i,]
+      row$name = dusers[[row$user]]
+      newpp = rbind(newpp, row)
+    }
+    
+    dataset$per_player = newpp
+  }
+  
+  return(dataset)
+}
+
 # Splits data from an "ALL" dataset into multiple sets, one for each team
 #   allset - an "ALL" dataset (list)
 #
